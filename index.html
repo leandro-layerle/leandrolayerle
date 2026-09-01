@@ -1307,6 +1307,12 @@
       var data = await response.json().catch(function(){return {};});
       if(!response.ok) throw new Error(data.message || 'No pudimos enviar la consulta.');
 
+      if (typeof gtag === 'function') {
+        gtag('event', 'generate_lead', {
+          method: 'contact_form'
+      });
+}
+
       form.reset();
       statusBox.className='form-status success';
       statusBox.textContent='Gracias. Recibimos tu consulta y te vamos a contactar para entender mejor el problema.';
