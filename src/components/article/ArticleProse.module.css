@@ -1,0 +1,167 @@
+.h1 {
+  margin: 70px 0 24px;
+
+  font-size: 38px;
+  line-height: 1.08;
+
+  font-weight: 720;
+
+  letter-spacing: -0.045em;
+
+  color: #111820;
+}
+
+.h2 {
+  margin: 55px 0 20px;
+
+  font-size: 30px;
+  line-height: 1.15;
+
+  font-weight: 700;
+
+  letter-spacing: -0.035em;
+
+  color: #111820;
+}
+
+.h3 {
+  margin: 38px 0 15px;
+
+  font-size: 22px;
+  line-height: 1.2;
+
+  font-weight: 680;
+
+  letter-spacing: -0.025em;
+
+  color: #17212b;
+}
+
+.paragraph {
+  margin: 0 0 20px;
+
+  font-size: 17px;
+  line-height: 1.82;
+
+  color: #4f585f;
+}
+
+.strong {
+  font-weight: 700;
+
+  color: #17212b;
+}
+
+.ul,
+.ol {
+  margin: 18px 0 28px;
+
+  padding-left: 27px;
+
+  color: #4d565d;
+}
+
+.ul li,
+.ol li {
+  margin: 8px 0;
+
+  padding-left: 5px;
+
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.ul li::marker {
+  color: #286de6;
+}
+
+.ol li::marker {
+  font-weight: 700;
+
+  color: #286de6;
+}
+
+.inlineCode {
+  padding: 2px 6px;
+
+  border: 1px solid #e0e5eb;
+
+  border-radius: 5px;
+
+  background: #f3f5f7;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 0.88em;
+
+  color: #1556aa;
+}
+
+.blockquote {
+  margin: 32px 0;
+
+  padding: 22px 26px;
+
+  border-left: 4px solid #2e6fdd;
+
+  border-radius: 0 12px 12px 0;
+
+  background: #f2f6fd;
+
+  color: #3e4a55;
+}
+
+.blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.link {
+  color: #1e63cf;
+
+  font-weight: 600;
+
+  text-decoration: underline;
+
+  text-decoration-color: rgba(30, 99, 207, 0.3);
+
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  text-decoration-color: #1e63cf;
+}
+
+.hr {
+  height: 1px;
+
+  margin: 55px 0;
+
+  border: 0;
+
+  background: #e0e1df;
+}
+
+@media (max-width: 700px) {
+  .h1 {
+    margin-top: 52px;
+
+    font-size: 31px;
+  }
+
+  .h2 {
+    font-size: 26px;
+  }
+
+  .h3 {
+    font-size: 21px;
+  }
+
+  .paragraph {
+    font-size: 16px;
+
+    line-height: 1.75;
+  }
+}

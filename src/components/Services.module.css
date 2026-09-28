@@ -1,0 +1,458 @@
+.section {
+  padding: 92px 0;
+
+  background:
+    radial-gradient(
+      circle at 10% 85%,
+      rgba(51, 112, 235, 0.07),
+      transparent 30%
+    ),
+    #f7f5f0;
+
+  color: #101820;
+}
+
+.container {
+  width: min(1420px, calc(100% - 80px));
+  margin: 0 auto;
+}
+
+/* ============================================================
+   LAYOUT GENERAL
+============================================================ */
+
+.layout {
+  display: grid;
+
+  grid-template-columns: 330px minmax(0, 1fr);
+
+  gap: 48px;
+
+  align-items: center;
+}
+
+/* ============================================================
+   INTRO
+============================================================ */
+
+.intro {
+  padding-right: 10px;
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+
+  color: #6f767d;
+}
+
+.title {
+  margin: 0;
+
+  font-size: 46px;
+  line-height: 0.98;
+
+  font-weight: 730;
+
+  letter-spacing: -0.055em;
+
+  color: #101820;
+}
+
+.title span {
+  display: block;
+
+  margin-top: 5px;
+
+  color: #2868e8;
+}
+
+.introText {
+  max-width: 305px;
+
+  margin: 22px 0 0;
+
+  font-size: 15px;
+  line-height: 1.65;
+
+  color: #626970;
+}
+
+.mainButton {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 18px;
+
+  margin-top: 28px;
+
+  padding: 14px 21px;
+
+  border-radius: 10px;
+
+  background: #1769f5;
+
+  box-shadow: 0 10px 25px rgba(23, 105, 245, 0.18);
+
+  font-size: 13px;
+  font-weight: 650;
+
+  color: white;
+
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.mainButton span {
+  font-size: 18px;
+}
+
+.mainButton:hover {
+  background: #0f5bdc;
+
+  transform: translateY(-1px);
+}
+
+/* ============================================================
+   GRID
+============================================================ */
+
+.grid {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 16px;
+}
+
+/* ============================================================
+   CARD
+============================================================ */
+
+.card {
+  position: relative;
+
+  min-height: 235px;
+
+  overflow: hidden;
+
+  display: grid;
+
+  grid-template-columns: 60% 40%;
+
+  border: 1px solid rgba(16, 24, 32, 0.08);
+
+  border-radius: 18px;
+
+  background: rgba(255, 255, 255, 0.88);
+
+  box-shadow:
+    0 14px 40px rgba(16, 24, 32, 0.07),
+    inset 0 1px rgba(255, 255, 255, 0.8);
+
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+
+  box-shadow:
+    0 20px 52px rgba(16, 24, 32, 0.10),
+    inset 0 1px rgba(255, 255, 255, 0.8);
+}
+
+/* ============================================================
+   CONTENIDO
+============================================================ */
+
+.cardContent {
+  position: relative;
+
+  z-index: 3;
+
+  padding: 22px 18px 20px 24px;
+}
+
+.cardIcon {
+  width: 46px;
+  height: 46px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 12px;
+
+  border-radius: 50%;
+
+  background: #edf3ff;
+
+  font-size: 18px;
+  font-weight: 700;
+
+  color: #2569e8;
+}
+
+.cardContent h3 {
+  max-width: 260px;
+
+  margin: 0;
+
+  font-size: 20px;
+  line-height: 1.08;
+
+  font-weight: 720;
+
+  letter-spacing: -0.035em;
+
+  color: #111820;
+}
+
+.cardDescription {
+  max-width: 280px;
+
+  margin: 9px 0 0;
+
+  font-size: 12px;
+  line-height: 1.48;
+
+  color: #5f666c;
+}
+
+/* ============================================================
+   BULLETS
+============================================================ */
+
+.bullets {
+  margin: 12px 0 0;
+
+  padding: 0;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 6px;
+
+  list-style: none;
+}
+
+.bullets li {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 7px;
+
+  font-size: 11px;
+  line-height: 1.35;
+
+  color: #4f575d;
+}
+
+.check {
+  width: 14px;
+  height: 14px;
+
+  flex: 0 0 14px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  margin-top: 1px;
+
+  border-radius: 50%;
+
+  background: #2474f3;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  color: white;
+}
+
+/* ============================================================
+   IMAGEN
+============================================================ */
+
+.imageArea {
+  position: relative;
+
+  min-width: 0;
+
+  overflow: hidden;
+}
+
+.image {
+  object-fit: cover;
+}
+
+.imageGradient {
+  position: absolute;
+
+  inset: 0;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(255, 255, 255, 0.70) 12%,
+      rgba(255, 255, 255, 0.18) 32%,
+      rgba(255, 255, 255, 0) 55%
+    );
+}
+
+/* ============================================================
+   BOTÓN CIRCULAR
+============================================================ */
+
+.cardButton {
+  position: absolute;
+
+  z-index: 5;
+
+  right: 16px;
+  bottom: 16px;
+
+  width: 38px;
+  height: 38px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(16, 24, 32, 0.10);
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.92);
+
+  box-shadow: 0 6px 18px rgba(10, 20, 30, 0.12);
+
+  font-size: 18px;
+
+  color: #101820;
+
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.cardButton:hover {
+  background: #1769f5;
+
+  color: white;
+
+  transform: translateX(2px);
+}
+
+/* ============================================================
+   TABLET
+============================================================ */
+
+@media (max-width: 1150px) {
+  .section {
+    padding: 80px 0;
+  }
+
+  .container {
+    width: calc(100% - 48px);
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+
+    gap: 40px;
+  }
+
+  .intro {
+    max-width: 600px;
+  }
+
+  .introText {
+    max-width: 540px;
+  }
+}
+
+/* ============================================================
+   TABLET CHICO
+============================================================ */
+
+@media (max-width: 850px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    min-height: 240px;
+  }
+}
+
+/* ============================================================
+   MOBILE
+============================================================ */
+
+@media (max-width: 600px) {
+  .section {
+    padding: 65px 0;
+  }
+
+  .container {
+    width: calc(100% - 36px);
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .card {
+    grid-template-columns: 1fr;
+
+    min-height: 440px;
+  }
+
+  .cardContent {
+    padding: 22px;
+  }
+
+  .imageArea {
+    min-height: 190px;
+  }
+
+  .imageGradient {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 1) 0%,
+        rgba(255, 255, 255, 0.2) 30%,
+        transparent 55%
+      );
+  }
+
+  .cardContent h3 {
+    font-size: 22px;
+  }
+
+  .cardDescription {
+    font-size: 13px;
+  }
+
+  .bullets li {
+    font-size: 12px;
+  }
+}

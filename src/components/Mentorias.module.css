@@ -1,0 +1,538 @@
+.section {
+  min-height: 760px;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(460px, 48%)
+    minmax(0, 52%);
+
+  overflow: hidden;
+
+  background: #faf8f4;
+
+  color: #0b1727;
+}
+
+/* ============================================================
+   IMAGEN
+============================================================ */
+
+.visual {
+  position: relative;
+
+  min-height: 760px;
+
+  overflow: hidden;
+
+  background: #172330;
+}
+
+.photo {
+  object-fit: cover;
+
+  object-position: center center;
+}
+
+/* ============================================================
+   CONTENIDO
+============================================================ */
+
+.content {
+  display: flex;
+
+  align-items: center;
+
+  padding: 62px 4.5vw 58px 3.5vw;
+
+  background:
+    radial-gradient(
+      circle at 95% 10%,
+      rgba(38, 105, 224, 0.045),
+      transparent 34%
+    ),
+    #faf8f4;
+}
+
+.contentInner {
+  width: min(780px, 100%);
+
+  margin: 0 auto;
+}
+
+/* ============================================================
+   TOP
+============================================================ */
+
+.top {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 30px;
+
+  margin-bottom: 25px;
+}
+
+.eyebrow {
+  display: flex;
+
+  align-items: center;
+
+  gap: 16px;
+}
+
+.eyebrow span {
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.28em;
+
+  text-transform: uppercase;
+
+  color: #1168ec;
+}
+
+.eyebrow i {
+  width: 54px;
+  height: 1px;
+
+  background: #72a2e9;
+}
+
+.secondaryButton {
+  min-height: 45px;
+
+  padding: 0 20px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 25px;
+
+  border: 1px solid #1471f3;
+
+  border-radius: 9px;
+
+  background: transparent;
+
+  font-size: 12px;
+  font-weight: 650;
+
+  color: #1165dc;
+
+  text-decoration: none;
+
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.secondaryButton:hover {
+  background: #1169eb;
+
+  color: white;
+}
+
+.secondaryButton span {
+  font-size: 18px;
+}
+
+/* ============================================================
+   TITULO
+============================================================ */
+
+.title {
+  max-width: 750px;
+
+  margin: 0;
+
+  font-family:
+    Georgia,
+    "Times New Roman",
+    serif;
+
+  font-size: clamp(
+    47px,
+    4vw,
+    67px
+  );
+
+  line-height: 0.94;
+
+  font-weight: 400;
+
+  letter-spacing: -0.052em;
+
+  color: #091729;
+}
+
+.title em {
+  font-weight: 400;
+
+  font-style: italic;
+
+  color: #1768e8;
+}
+
+/* ============================================================
+   DESCRIPCION
+============================================================ */
+
+.description {
+  max-width: 710px;
+
+  margin: 23px 0 0;
+
+  font-size: 16px;
+  line-height: 1.55;
+
+  color: #596a7c;
+}
+
+/* ============================================================
+   GRID
+============================================================ */
+
+.grid {
+  margin-top: 28px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 16px;
+}
+
+/* ============================================================
+   CARD
+============================================================ */
+
+.card {
+  min-height: 142px;
+
+  padding: 20px 20px;
+
+  display: grid;
+
+  grid-template-columns: 72px 1fr;
+
+  align-items: center;
+
+  gap: 16px;
+
+  border: 1px solid #dfe2e5;
+
+  border-radius: 11px;
+
+  background:
+    rgba(255, 255, 255, 0.45);
+
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+
+  background: #ffffff;
+
+  box-shadow:
+    0 14px 32px
+      rgba(21, 34, 50, 0.07);
+}
+
+/* ============================================================
+   ICONOS
+   NO CAMBIAR PROPORCIÓN
+============================================================ */
+
+.icon {
+  width: 64px;
+  height: 64px;
+
+  aspect-ratio: 1 / 1;
+
+  flex: 0 0 64px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #e9f2ff;
+
+  color: #0b6cf0;
+}
+
+.icon svg {
+  width: 36px;
+  height: 36px;
+
+  aspect-ratio: 1 / 1;
+
+  fill: none;
+
+  stroke: currentColor;
+
+  stroke-width: 2.6;
+
+  stroke-linecap: round;
+
+  stroke-linejoin: round;
+
+  vector-effect: non-scaling-stroke;
+}
+
+.card h3 {
+  margin: 0 0 8px;
+
+  font-size: 17px;
+  line-height: 1.1;
+
+  font-weight: 720;
+
+  letter-spacing: -0.025em;
+
+  color: #101a29;
+}
+
+.card p {
+  margin: 0;
+
+  max-width: 235px;
+
+  font-size: 13px;
+  line-height: 1.5;
+
+  color: #687788;
+}
+
+/* ============================================================
+   BOTTOM
+============================================================ */
+
+.bottom {
+  margin-top: 27px;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 45px;
+}
+
+.primaryButton {
+  min-width: 300px;
+  min-height: 58px;
+
+  padding: 0 24px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 30px;
+
+  border-radius: 10px;
+
+  background: #0867f2;
+
+  box-shadow:
+    0 10px 25px
+      rgba(8, 103, 242, 0.18);
+
+  font-size: 16px;
+  font-weight: 600;
+
+  color: white;
+
+  text-decoration: none;
+
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.primaryButton:hover {
+  background: #0759d1;
+
+  transform: translateY(-1px);
+}
+
+.primaryButton span {
+  font-size: 21px;
+}
+
+/* ============================================================
+   FRASE INFERIOR
+============================================================ */
+
+.statement {
+  display: flex;
+
+  align-items: center;
+
+  gap: 20px;
+}
+
+.statement > span {
+  width: 70px;
+  height: 1px;
+
+  background: #337de8;
+}
+
+.statement p {
+  margin: 0;
+
+  font-size: 9px;
+  line-height: 1.55;
+
+  font-weight: 600;
+
+  letter-spacing: 0.27em;
+
+  text-transform: uppercase;
+
+  color: #657991;
+}
+
+/* ============================================================
+   TABLET
+============================================================ */
+
+@media (max-width: 1180px) {
+  .section {
+    grid-template-columns:
+      42% 58%;
+  }
+
+  .content {
+    padding:
+      52px 38px;
+  }
+
+  .title {
+    font-size: 51px;
+  }
+
+  .card {
+    grid-template-columns:
+      60px 1fr;
+  }
+
+  .icon {
+    width: 56px;
+    height: 56px;
+
+    flex-basis: 56px;
+  }
+
+  .icon svg {
+    width: 32px;
+    height: 32px;
+  }
+
+  .bottom {
+    align-items: flex-start;
+
+    flex-direction: column;
+
+    gap: 25px;
+  }
+}
+
+/* ============================================================
+   MOBILE
+============================================================ */
+
+@media (max-width: 850px) {
+  .section {
+    display: flex;
+
+    flex-direction: column;
+  }
+
+  .visual {
+    min-height: 650px;
+  }
+
+  .content {
+    padding:
+      55px 26px 65px;
+  }
+
+  .top {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .title {
+    font-size: 47px;
+  }
+
+  .secondaryButton {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .visual {
+    min-height: 540px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    min-height: 125px;
+
+    grid-template-columns:
+      64px 1fr;
+  }
+
+  /*
+   * En mobile mantenemos el icono 1:1.
+   */
+
+  .icon {
+    width: 58px;
+    height: 58px;
+
+    flex-basis: 58px;
+  }
+
+  .icon svg {
+    width: 33px;
+    height: 33px;
+  }
+
+  .title {
+    font-size: 41px;
+  }
+
+  .primaryButton {
+    width: 100%;
+
+    min-width: 0;
+  }
+
+  .statement {
+    display: none;
+  }
+}

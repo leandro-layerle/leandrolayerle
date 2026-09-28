@@ -1,0 +1,110 @@
+.fallback {
+  position: absolute;
+  inset: 0;
+
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  padding: 28px;
+
+  background:
+    radial-gradient(
+      circle at 78% 20%,
+      rgba(44, 115, 235, 0.55),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 20% 95%,
+      rgba(38, 92, 170, 0.28),
+      transparent 38%
+    ),
+    linear-gradient(
+      145deg,
+      #081420 0%,
+      #11283d 58%,
+      #0b1927 100%
+    );
+
+  color: #ffffff;
+}
+
+.category {
+  width: fit-content;
+
+  padding: 7px 11px;
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+
+  background: rgba(6, 18, 31, 0.24);
+
+  font-size: 9px;
+  font-weight: 700;
+
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+
+  color: #a8c9ff;
+}
+
+.visual {
+  align-self: flex-end;
+
+  display: flex;
+  align-items: center;
+
+  gap: 2px;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: clamp(56px, 7vw, 100px);
+  line-height: 1;
+
+  font-weight: 300;
+  letter-spacing: -0.12em;
+
+  color: rgba(255, 255, 255, 0.15);
+}
+
+.visual strong {
+  font-weight: 300;
+
+  color: rgba(87, 151, 255, 0.65);
+}
+
+.decoration {
+  position: absolute;
+
+  top: 27px;
+  right: 27px;
+
+  display: flex;
+
+  gap: 5px;
+}
+
+.decoration i {
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.22);
+}
+
+@media (max-width: 600px) {
+  .fallback {
+    padding: 20px;
+  }
+
+  .decoration {
+    top: 20px;
+    right: 20px;
+  }
+}
