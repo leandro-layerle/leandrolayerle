@@ -2,9 +2,9 @@ import type { ComponentType } from "react";
 
 import type { ArticleMetadata } from "@/types/article";
 
-import ArticleContent, {
-  article as rawArticleMetadata,
-} from "./ef-core-10-named-query-filters.mdx";
+import {
+  generatedArticles,
+} from "./articles.generated";
 
 /* ============================================================
    TYPES
@@ -21,40 +21,34 @@ export type RegisteredArticle = {
 };
 
 /* ============================================================
-   CURRENT ARTICLE
-
-   El MDX expone:
-   - default -> componente React
-   - article -> metadata
-
-   Hacemos el cast explícito porque el tipado generado
-   automáticamente para MDX no conoce nuestra estructura.
-============================================================ */
-
-const efCore10NamedQueryFiltersMetadata =
-  rawArticleMetadata as unknown as ArticleMetadata;
-
-const EfCore10NamedQueryFiltersContent =
-  ArticleContent as ComponentType;
-
-/* ============================================================
    ARTICLE REGISTRY
+
+   Los artículos se descubren automáticamente mediante:
+
+   scripts/generate-articles-registry.mjs
+
+   Ese script genera:
+   articles.generated.ts
+
+   Este archivo ya no necesita modificarse cuando agregamos
+   nuevos archivos .mdx.
 ============================================================ */
 
-const registeredArticles: RegisteredArticle[] = [
-  {
-    metadata:
-      efCore10NamedQueryFiltersMetadata,
+const registeredArticles: RegisteredArticle[] =
+  generatedArticles.map(
+    (generatedArticle) => ({
+      metadata:
+        generatedArticle.metadata,
 
-    load: async () => ({
-      default:
-        EfCore10NamedQueryFiltersContent,
+      load: async () => ({
+        default:
+          generatedArticle.content,
 
-      article:
-        efCore10NamedQueryFiltersMetadata,
+        article:
+          generatedArticle.metadata,
+      }),
     }),
-  },
-];
+  );
 
 /* ============================================================
    GET ALL ARTICLES

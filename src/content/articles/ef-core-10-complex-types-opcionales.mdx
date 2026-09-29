@@ -1,0 +1,1277 @@
+export const article = {
+  title: "EF Core 10: Complex Types opcionales para modelar Value Objects",
+
+  slug: "ef-core-10-complex-types-opcionales",
+
+  excerpt:
+    "Cómo EF Core 10 permite modelar Complex Types opcionales, materializar null correctamente y trabajar con semántica de valor frente a Owned Types.",
+
+  category: "EF Core",
+
+  tags: [
+    ".NET 10",
+    "EF Core 10",
+    "C#",
+    "SQL",
+    "Complex Types",
+    "Value Objects",
+  ],
+
+  date: "2026-09-29",
+
+  readingTime: "18 min",
+
+  image: "/images/articles/ef-core-10-complex-types.png",
+
+  repository:
+    "https://github.com/leandro-layerle/EfCore10Labs/tree/main/02-ComplexTypes",
+
+  published: true,
+
+  series: "EF Core 10 New Features",
+  seriesOrder: 2,
+};
+
+Cuando modelamos una aplicación con Entity Framework Core, no todo lo que forma parte de una entidad necesita tener identidad propia.
+
+Una dirección es un buen ejemplo.
+
+Un `Customer` tiene identidad.
+
+Podemos distinguir un cliente de otro mediante su `Id`.
+
+Pero una dirección como:
+
+```text
+Av. Corrientes 1234
+Buenos Aires
+C1043
+Argentina
+```
+
+normalmente no necesita una identidad independiente dentro de nuestro modelo.
+
+Lo que nos importa son sus valores.
+
+Entity Framework Core introdujo los **Complex Types en EF Core 8** precisamente para modelar este tipo de objetos.
+
+EF Core 10 continúa ampliando esa capacidad y agrega, entre otras mejoras, soporte para **Complex Types opcionales**.
+
+En este laboratorio vamos a utilizar esa nueva posibilidad para representar un escenario bastante común:
+
+```text
+Customer
+├── ShippingAddress   obligatoria
+└── BillingAddress    opcional
+```
+
+Pero no vamos a quedarnos solamente con la declaración de las clases.
+
+Vamos a comprobar:
+
+- cómo se genera el esquema;
+- qué columnas quedan como `NULL`;
+- cómo EF Core materializa una propiedad compleja opcional;
+- cómo podemos consultar sus propiedades;
+- cómo se comparan dos Complex Types;
+- y qué diferencia existe frente a los Owned Types.
+
+---
+
+## El modelo que queremos representar
+
+Nuestro cliente tiene un nombre y dos direcciones:
+
+```csharp
+public sealed class Customer
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+
+    public required Address ShippingAddress { get; set; }
+
+    public Address? BillingAddress { get; set; }
+}
+```
+
+La dirección es:
+
+```csharp
+public sealed class Address
+{
+    public required string Street { get; set; }
+
+    public required string City { get; set; }
+
+    public required string PostalCode { get; set; }
+
+    public required string Country { get; set; }
+}
+```
+
+Hay una diferencia importante entre ambas propiedades:
+
+```csharp
+public required Address ShippingAddress { get; set; }
+```
+
+y:
+
+```csharp
+public Address? BillingAddress { get; set; }
+```
+
+La dirección de envío siempre debe existir.
+
+La dirección de facturación, en cambio, puede no existir.
+
+Por ejemplo, un cliente puede utilizar la misma información general para sus envíos y no necesitar una dirección de facturación específica.
+
+En ese caso queremos representar algo tan simple como:
+
+```csharp
+customer.BillingAddress == null
+```
+
+sin crear una entidad ficticia ni una fila independiente en otra tabla.
+
+---
+
+## Una breve aclaración: ¿qué es un Value Object?
+
+El concepto de **Value Object** suele aparecer cuando hablamos de Domain-Driven Design.
+
+No necesitamos entrar profundamente en DDD para entender la idea.
+
+Una entidad normalmente tiene identidad.
+
+Por ejemplo:
+
+```text
+Customer Id = 10
+```
+
+sigue siendo el mismo cliente aunque cambie su nombre o su dirección.
+
+Un Value Object, en cambio, normalmente representa un valor o concepto cuyo significado está dado por sus propiedades.
+
+Una dirección puede describirse mediante:
+
+```text
+Street
+City
+PostalCode
+Country
+```
+
+No necesitamos darle necesariamente:
+
+```text
+AddressId = 25
+```
+
+para poder utilizarla dentro de un `Customer`.
+
+Dos direcciones con los mismos valores pueden considerarse equivalentes desde el punto de vista del modelo.
+
+Esa idea encaja muy bien con los Complex Types de EF Core:
+
+```text
+Entity
+Customer
+    ↓
+tiene identidad
+
+Value Object
+Address
+    ↓
+se define por sus valores
+```
+
+Esto no significa que **todo Complex Type sea automáticamente un Value Object perfecto desde el punto de vista de DDD**.
+
+Son conceptos pertenecientes a niveles diferentes.
+
+Pero los Complex Types ofrecen una semántica especialmente adecuada para modelar objetos que no necesitan identidad propia.
+
+---
+
+## Configurando Address como Complex Type
+
+Los Complex Types se configuran explícitamente en el modelo.
+
+En nuestro `DbContext` hacemos:
+
+```csharp
+modelBuilder.Entity<Customer>(
+    customer =>
+    {
+        customer.HasKey(x => x.Id);
+
+        customer.Property(x => x.Name)
+            .IsRequired();
+
+        customer.ComplexProperty(
+            x => x.ShippingAddress);
+
+        customer.ComplexProperty(
+            x => x.BillingAddress);
+    });
+```
+
+Las dos propiedades utilizan el mismo tipo .NET:
+
+```text
+Address
+```
+
+pero tienen distinta opcionalidad en el modelo C#.
+
+```text
+ShippingAddress
+    ↓
+Address
+
+BillingAddress
+    ↓
+Address?
+```
+
+En EF Core 8 ya podíamos trabajar con Complex Types.
+
+La diferencia que nos interesa en este artículo es que **EF Core 10 permite que una complex property sea opcional**.
+
+Actualmente, un Complex Type opcional necesita tener al menos una propiedad requerida dentro del propio tipo.
+
+Nuestro `Address` cumple esa condición:
+
+```csharp
+public required string Street { get; set; }
+public required string City { get; set; }
+public required string PostalCode { get; set; }
+public required string Country { get; set; }
+```
+
+---
+
+## ¿Qué genera la migración?
+
+Después de crear la primera migración, EF Core genera una única tabla:
+
+```text
+Customers
+```
+
+No existe una tabla:
+
+```text
+Addresses
+```
+
+La migración contiene:
+
+```csharp
+migrationBuilder.CreateTable(
+    name: "Customers",
+    columns: table => new
+    {
+        Id = table.Column<int>(
+            type: "int",
+            nullable: false)
+            .Annotation(
+                "SqlServer:Identity",
+                "1, 1"),
+
+        Name = table.Column<string>(
+            type: "nvarchar(max)",
+            nullable: false),
+
+        BillingAddress_City =
+            table.Column<string>(
+                type: "nvarchar(max)",
+                nullable: true),
+
+        BillingAddress_Country =
+            table.Column<string>(
+                type: "nvarchar(max)",
+                nullable: true),
+
+        BillingAddress_PostalCode =
+            table.Column<string>(
+                type: "nvarchar(max)",
+                nullable: true),
+
+        BillingAddress_Street =
+            table.Column<string>(
+                type: "nvarchar(max)",
+                nullable: true),
+
+        ShippingAddress_City =
+            table.Column<string>(
+                type: "nvarchar(max)",
+                nullable: false),
+
+        ShippingAddress_Country =
+            table.Column<string>(
+                type: "nvarchar(max)",
+                nullable: false),
+
+        ShippingAddress_PostalCode =
+            table.Column<string>(
+                type: "nvarchar(max)",
+                nullable: false),
+
+        ShippingAddress_Street =
+            table.Column<string>(
+                type: "nvarchar(max)",
+                nullable: false)
+    });
+```
+
+La diferencia se ve inmediatamente.
+
+### ShippingAddress
+
+```text
+ShippingAddress_City         NOT NULL
+ShippingAddress_Country      NOT NULL
+ShippingAddress_PostalCode   NOT NULL
+ShippingAddress_Street       NOT NULL
+```
+
+### BillingAddress
+
+```text
+BillingAddress_City          NULL
+BillingAddress_Country       NULL
+BillingAddress_PostalCode    NULL
+BillingAddress_Street        NULL
+```
+
+Es exactamente lo que declaramos en C#.
+
+```csharp
+public required Address ShippingAddress { get; set; }
+
+public Address? BillingAddress { get; set; }
+```
+
+La opcionalidad del objeto termina reflejada en las columnas de la tabla.
+
+---
+
+## Probando una dirección opcional
+
+Para comprobar el comportamiento cargamos dos clientes.
+
+El primero tiene ambas direcciones:
+
+```csharp
+var customerWithBillingAddress =
+    new Customer
+    {
+        Name = "Acme Argentina",
+
+        ShippingAddress = new Address
+        {
+            Street = "Av. Corrientes 1234",
+            City = "Buenos Aires",
+            PostalCode = "C1043",
+            Country = "Argentina"
+        },
+
+        BillingAddress = new Address
+        {
+            Street = "Av. Santa Fe 2500",
+            City = "Buenos Aires",
+            PostalCode = "C1123",
+            Country = "Argentina"
+        }
+    };
+```
+
+El segundo no tiene dirección de facturación:
+
+```csharp
+var customerWithoutBillingAddress =
+    new Customer
+    {
+        Name = "Contoso Argentina",
+
+        ShippingAddress = new Address
+        {
+            Street = "San Martín 500",
+            City = "Córdoba",
+            PostalCode = "X5000",
+            Country = "Argentina"
+        },
+
+        BillingAddress = null
+    };
+```
+
+Después de guardar ambos registros, la tabla muestra algo conceptualmente equivalente a:
+
+```text
+Customer 1 - Acme Argentina
+
+ShippingAddress_*  → valores
+BillingAddress_*   → valores
+```
+
+y:
+
+```text
+Customer 2 - Contoso Argentina
+
+ShippingAddress_*  → valores
+BillingAddress_*   → NULL
+```
+
+No estamos simulando la ausencia de dirección mediante strings vacíos.
+
+Tampoco estamos creando un objeto `Address` con todas sus propiedades vacías.
+
+En SQL Server, las columnas correspondientes a `BillingAddress` contienen realmente:
+
+```sql
+NULL
+```
+
+---
+
+## La materialización también devuelve null
+
+La prueba importante no termina mirando la tabla.
+
+Queremos saber qué ocurre cuando EF Core vuelve a leer ese registro.
+
+La consulta es normal:
+
+```csharp
+var customers =
+    await _context.Customers
+        .AsNoTracking()
+        .OrderBy(customer => customer.Id)
+        .ToListAsync();
+```
+
+La API devuelve:
+
+```json
+{
+  "id": 2,
+  "name": "Contoso Argentina",
+  "shippingAddress": {
+    "street": "San Martín 500",
+    "city": "Córdoba",
+    "postalCode": "X5000",
+    "country": "Argentina"
+  },
+  "billingAddress": null
+}
+```
+
+Esto es exactamente lo que queríamos comprobar.
+
+EF Core no materializa un `Address` vacío.
+
+La propiedad queda realmente:
+
+```csharp
+BillingAddress == null
+```
+
+La cadena completa es:
+
+```text
+Address?
+    ↓
+migración con columnas NULL
+    ↓
+datos NULL en SQL Server
+    ↓
+materialización
+    ↓
+BillingAddress == null
+```
+
+---
+
+## Consultando propiedades internas del Complex Type
+
+Que `Address` no tenga identidad propia no significa que perdamos capacidad de consulta.
+
+Podemos escribir:
+
+```csharp
+var query =
+    _context.Customers
+        .AsNoTracking()
+        .Where(customer =>
+            customer.ShippingAddress.City == city)
+        .OrderBy(customer => customer.Id);
+```
+
+Desde C# navegamos naturalmente por:
+
+```text
+Customer
+    ↓
+ShippingAddress
+    ↓
+City
+```
+
+El SQL generado en nuestro laboratorio fue:
+
+```sql
+DECLARE @city nvarchar(4000) = N'Buenos Aires';
+
+SELECT [c].[Id],
+       [c].[Name],
+       [c].[BillingAddress_City],
+       [c].[BillingAddress_Country],
+       [c].[BillingAddress_PostalCode],
+       [c].[BillingAddress_Street],
+       [c].[ShippingAddress_City],
+       [c].[ShippingAddress_Country],
+       [c].[ShippingAddress_PostalCode],
+       [c].[ShippingAddress_Street]
+FROM [Customers] AS [c]
+WHERE [c].[ShippingAddress_City] = @city
+ORDER BY [c].[Id]
+```
+
+No aparece ningún:
+
+```sql
+JOIN
+```
+
+porque `Address` no está almacenada como una fila independiente en otra tabla.
+
+EF simplemente consulta:
+
+```sql
+[c].[ShippingAddress_City]
+```
+
+dentro de `Customers`.
+
+---
+
+## Consultando si el Complex Type es null
+
+También podemos consultar directamente:
+
+```csharp
+.Where(customer =>
+    customer.BillingAddress == null)
+```
+
+En nuestro modelo, EF Core generó:
+
+```sql
+WHERE [c].[BillingAddress_City] IS NULL
+```
+
+El resultado fue:
+
+```text
+Contoso Argentina
+```
+
+con:
+
+```json
+"billingAddress": null
+```
+
+Hay un detalle interesante.
+
+EF no necesitó comprobar las cuatro columnas.
+
+En nuestro modelo utilizó una propiedad requerida del Complex Type para determinar la ausencia del objeto:
+
+```sql
+BillingAddress_City IS NULL
+```
+
+No conviene depender en nuestra aplicación de qué propiedad concreta elige EF para producir esa comprobación.
+
+Lo importante es la semántica del LINQ:
+
+```csharp
+customer.BillingAddress == null
+```
+
+y que EF Core sabe traducirla.
+
+---
+
+## Entonces, ¿qué diferencia hay con un Owned Type?
+
+Hasta acá alguien podría preguntarse:
+
+> ¿No podía modelar algo parecido con `OwnsOne()`?
+
+Sí.
+
+De hecho, durante bastante tiempo los Owned Types fueron una alternativa habitual para este tipo de modelado.
+
+Por eso agregamos un segundo modelo al laboratorio.
+
+```csharp
+public sealed class OwnedCustomer
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+
+    public required OwnedAddress ShippingAddress { get; set; }
+
+    public OwnedAddress? BillingAddress { get; set; }
+}
+```
+
+y lo configuramos así:
+
+```csharp
+customer.OwnsOne(
+    x => x.ShippingAddress);
+
+customer.OwnsOne(
+    x => x.BillingAddress);
+```
+
+Al generar la migración obtenemos nuevamente algo muy parecido:
+
+```text
+OwnedCustomers
+
+ShippingAddress_Street
+ShippingAddress_City
+ShippingAddress_PostalCode
+ShippingAddress_Country
+
+BillingAddress_Street
+BillingAddress_City
+BillingAddress_PostalCode
+BillingAddress_Country
+```
+
+Mirando solamente el esquema físico podríamos pensar que:
+
+```text
+Complex Type ≈ Owned Type
+```
+
+Pero esa conclusión sería incorrecta.
+
+La diferencia importante está en el modelo que EF Core mantiene internamente.
+
+---
+
+## Owned Type sigue siendo una entidad
+
+Un Owned Type continúa siendo un **entity type** para EF Core.
+
+Aunque no declaremos nosotros una propiedad `OwnedAddressId`, EF mantiene identidad y tracking para esa instancia owned.
+
+Un Complex Type, en cambio, no tiene una identidad independiente.
+
+Y esa diferencia produce comportamientos concretos.
+
+Para comprobarlo usamos exactamente el mismo escenario con ambos modelos.
+
+---
+
+## Compartiendo la misma instancia con Complex Types
+
+Creamos una única dirección:
+
+```csharp
+var address =
+    new Address
+    {
+        Street = "Av. Libertador 5000",
+        City = "Buenos Aires",
+        PostalCode = "C1426",
+        Country = "Argentina"
+    };
+```
+
+y utilizamos la misma instancia en ambas propiedades:
+
+```csharp
+var customer =
+    new Customer
+    {
+        Name = "Fabrikam Complex",
+
+        ShippingAddress = address,
+
+        BillingAddress = address
+    };
+```
+
+Antes de guardar podemos comprobar:
+
+```csharp
+ReferenceEquals(
+    customer.ShippingAddress,
+    customer.BillingAddress)
+```
+
+El resultado es:
+
+```text
+true
+```
+
+Y:
+
+```csharp
+await _context.SaveChangesAsync();
+```
+
+funciona correctamente.
+
+EF Core permite que esa instancia participe en más de una complex property porque `Address` no representa una entidad independiente con una identidad que deba ser rastreada.
+
+Hay un matiz importante.
+
+En nuestro ejemplo `Address` es una clase mutable.
+
+Compartir la misma instancia significa que, a nivel de C#, una modificación sobre ese objeto se verá reflejada en todos los lugares que apuntan a esa misma instancia.
+
+Por eso, aunque EF permita esta utilización, eso no significa que compartir referencias mutables sea siempre la mejor decisión de diseño.
+
+Una alternativa habitual para Value Objects es utilizar tipos inmutables.
+
+---
+
+## El mismo escenario falla con Owned Types
+
+Repetimos exactamente la idea utilizando `OwnedAddress`.
+
+Creamos una sola instancia:
+
+```csharp
+var address =
+    new OwnedAddress
+    {
+        Street = "Av. Libertador 5000",
+        City = "Buenos Aires",
+        PostalCode = "C1426",
+        Country = "Argentina"
+    };
+```
+
+y hacemos:
+
+```csharp
+var customer =
+    new OwnedCustomer
+    {
+        Name = "Fabrikam Owned",
+
+        ShippingAddress = address,
+
+        BillingAddress = address
+    };
+```
+
+También aquí:
+
+```csharp
+ReferenceEquals(
+    customer.ShippingAddress,
+    customer.BillingAddress)
+```
+
+devuelve:
+
+```text
+true
+```
+
+Pero al intentar guardar:
+
+```csharp
+await _context.SaveChangesAsync();
+```
+
+obtenemos:
+
+```text
+InvalidOperationException
+```
+
+En nuestro laboratorio, EF Core devolvió:
+
+```text
+The property 'OwnedCustomerId' belongs to the type
+'OwnedCustomer.ShippingAddress#OwnedAddress',
+but is being used with an instance of type
+'OwnedCustomer.BillingAddress#OwnedAddress'.
+```
+
+El problema no está en los valores de la dirección.
+
+El problema es su identidad dentro del modelo de EF.
+
+La misma instancia está intentando participar simultáneamente como:
+
+```text
+OwnedCustomer.ShippingAddress
+```
+
+y:
+
+```text
+OwnedCustomer.BillingAddress
+```
+
+Dos owned navigations diferentes.
+
+Con Complex Types esa restricción no existe.
+
+---
+
+## Semántica de valor: comparando dos direcciones
+
+La diferencia se vuelve todavía más clara cuando hacemos una consulta.
+
+Para nuestro `Customer` con Complex Types escribimos:
+
+```csharp
+var query =
+    _context.Customers
+        .AsNoTracking()
+        .Where(customer =>
+            customer.BillingAddress != null &&
+            customer.ShippingAddress ==
+            customer.BillingAddress)
+        .OrderBy(customer => customer.Id);
+```
+
+La parte interesante es:
+
+```csharp
+customer.ShippingAddress ==
+customer.BillingAddress
+```
+
+No escribimos manualmente cada comparación de propiedades.
+
+EF Core entiende la comparación de Complex Types por su contenido.
+
+El SQL generado fue:
+
+```sql
+WHERE [c].[BillingAddress_City] IS NOT NULL
+  AND [c].[ShippingAddress_City] =
+      [c].[BillingAddress_City]
+  AND [c].[ShippingAddress_Country] =
+      [c].[BillingAddress_Country]
+  AND [c].[ShippingAddress_PostalCode] =
+      [c].[BillingAddress_PostalCode]
+  AND [c].[ShippingAddress_Street] =
+      [c].[BillingAddress_Street]
+```
+
+Es decir:
+
+```text
+ShippingAddress == BillingAddress
+        ↓
+comparación por valores
+        ↓
+City
+Country
+PostalCode
+Street
+```
+
+Eso es exactamente lo que esperamos de un objeto sin identidad propia.
+
+---
+
+## La misma comparación con Owned Types
+
+Ahora construimos un `OwnedCustomer` con dos objetos diferentes:
+
+```csharp
+var shippingAddress =
+    new OwnedAddress
+    {
+        Street = "Av. Libertador 5000",
+        City = "Buenos Aires",
+        PostalCode = "C1426",
+        Country = "Argentina"
+    };
+
+var billingAddress =
+    new OwnedAddress
+    {
+        Street = "Av. Libertador 5000",
+        City = "Buenos Aires",
+        PostalCode = "C1426",
+        Country = "Argentina"
+    };
+```
+
+Los valores son exactamente iguales.
+
+Pero son dos instancias distintas:
+
+```csharp
+ReferenceEquals(
+    shippingAddress,
+    billingAddress)
+```
+
+devuelve:
+
+```text
+false
+```
+
+Guardarlas funciona.
+
+Después ejecutamos conceptualmente la misma comparación:
+
+```csharp
+.Where(customer =>
+    customer.BillingAddress != null &&
+    customer.ShippingAddress ==
+    customer.BillingAddress)
+```
+
+El SQL producido fue:
+
+```sql
+WHERE 0 = 1
+```
+
+y el resultado:
+
+```text
+[]
+```
+
+A primera vista puede sorprender.
+
+Las dos direcciones tienen exactamente los mismos datos.
+
+Pero EF no está preguntando si esos valores son iguales.
+
+Está comparando entidades owned.
+
+Y esas dos propiedades representan identidades diferentes dentro del modelo.
+
+Por eso:
+
+```text
+Complex Type
+    ↓
+comparación por contenido
+```
+
+mientras que:
+
+```text
+Owned Type
+    ↓
+comparación por identidad
+```
+
+---
+
+## La diferencia no siempre se ve en la base de datos
+
+Este laboratorio deja una enseñanza interesante.
+
+Las dos migraciones generan estructuras muy similares:
+
+```text
+Customers
+└── ShippingAddress_*
+└── BillingAddress_*
+```
+
+y:
+
+```text
+OwnedCustomers
+└── ShippingAddress_*
+└── BillingAddress_*
+```
+
+Ambos modelos terminan almacenando las direcciones en la misma tabla que contiene al cliente.
+
+Por eso la diferencia entre Complex Types y Owned Types no debe evaluarse solamente mirando las tablas.
+
+La diferencia está principalmente en su semántica dentro del modelo.
+
+| Aspecto | Complex Type | Owned Type |
+|---|---|---|
+| Identidad propia | No | Sí, interna |
+| Semántica | Valor | Entidad / referencia |
+| Puede compartir la misma instancia | Sí | No |
+| Comparación LINQ | Por contenido | Por identidad |
+| Tabla separada requerida | No | No necesariamente |
+| Buen candidato para Value Objects | Sí | Puede utilizarse, pero conserva semántica de entidad |
+
+---
+
+## ¿Cuándo usar Complex Types?
+
+Los Complex Types encajan especialmente bien cuando tenemos objetos que:
+
+- forman parte de una entidad;
+- no necesitan identidad independiente;
+- se describen por sus valores;
+- no necesitan ser consultados como un agregado independiente.
+
+Ejemplos habituales podrían ser:
+
+```text
+Address
+Money
+Coordinates
+PhoneNumber
+Dimensions
+Period
+ContactInformation
+```
+
+Naturalmente, cada caso debe analizarse dentro del modelo de dominio.
+
+El criterio importante no es:
+
+> Tiene varias propiedades, entonces hago un Complex Type.
+
+La pregunta más útil es:
+
+> ¿Este objeto necesita identidad propia dentro de mi dominio?
+
+Si la respuesta es no y su significado está dado principalmente por sus valores, un Complex Type puede ser un muy buen candidato.
+
+---
+
+## ¿Cuándo no usarlo?
+
+No utilizaría un Complex Type para algo que realmente tenga ciclo de vida e identidad independiente.
+
+Por ejemplo, si una dirección:
+
+- necesita un `Id`;
+- se administra independientemente;
+- puede ser referenciada por múltiples agregados como entidad;
+- tiene relaciones propias;
+- necesita consultarse mediante un `DbSet`;
+
+entonces probablemente estemos hablando de una entidad y no de un simple Value Object.
+
+Tampoco utilizaría Complex Types solamente para evitar crear una tabla.
+
+La decisión debería partir del modelo, no de una preferencia por tener menos tablas.
+
+---
+
+## Complex Types opcionales: una limitación actual
+
+En EF Core 10 podemos escribir:
+
+```csharp
+public Address? BillingAddress { get; set; }
+```
+
+pero actualmente el Complex Type opcional necesita tener al menos una propiedad requerida.
+
+Nuestro ejemplo cumple naturalmente esa condición.
+
+Todas estas propiedades son requeridas:
+
+```csharp
+public required string Street { get; set; }
+
+public required string City { get; set; }
+
+public required string PostalCode { get; set; }
+
+public required string Country { get; set; }
+```
+
+Eso permite a EF determinar si existe o no la instancia compleja cuando materializa los datos.
+
+Es una restricción que conviene conocer antes de diseñar un tipo donde absolutamente todas las propiedades internas sean opcionales.
+
+---
+
+## Otra mejora de EF Core 10: nombres de columnas
+
+Aunque no es el foco principal del laboratorio, EF Core 10 también modifica cómo administra determinados nombres de columnas de Complex Types.
+
+Si dos propiedades complejas terminan intentando utilizar el mismo nombre de columna, EF Core 10 busca evitar que compartan silenciosamente esa columna y uniquifica los nombres.
+
+Además, para Complex Types anidados, ahora utiliza la ruta completa como parte del nombre generado.
+
+Son cambios pequeños desde el punto de vista de la API, pero importantes al revisar migraciones durante una actualización.
+
+En nuestro laboratorio no necesitamos configuración especial.
+
+EF genera directamente:
+
+```text
+BillingAddress_City
+BillingAddress_Country
+BillingAddress_PostalCode
+BillingAddress_Street
+
+ShippingAddress_City
+ShippingAddress_Country
+ShippingAddress_PostalCode
+ShippingAddress_Street
+```
+
+---
+
+## ¿Y JSON?
+
+EF Core 10 también permite mapear Complex Types a JSON.
+
+Por ejemplo, conceptualmente podríamos tener:
+
+```csharp
+customer.ComplexProperty(
+    x => x.ShippingAddress,
+    complex => complex.ToJson());
+```
+
+Pero deliberadamente no utilizamos JSON en este laboratorio.
+
+La razón es simple: merece analizarse por separado.
+
+Aquí queríamos entender:
+
+```text
+Complex Types
++
+propiedades opcionales
++
+semántica de valor
++
+comparación con Owned Types
+```
+
+El mapeo JSON forma parte del siguiente laboratorio de esta serie.
+
+---
+
+## El código completo
+
+El ejemplo que acompaña este artículo se encuentra en:
+
+```text
+EfCore10Labs
+└── 02-ComplexTypes
+    ├── ComplexTypes.slnx
+    └── ComplexTypes.Api
+```
+
+El laboratorio utiliza:
+
+```text
+.NET 10
+Entity Framework Core 10
+ASP.NET Core Web API
+SQL Server
+```
+
+Además incluye un archivo:
+
+```text
+ComplexTypes.Api.http
+```
+
+con las pruebas utilizadas durante el artículo:
+
+```text
+POST /api/customers/seed
+GET /api/customers
+GET /api/customers/shipping-city/Buenos%20Aires
+GET /api/customers/without-billing-address
+POST /api/customers/shared-address-complex
+GET /api/customers/same-shipping-and-billing-address
+
+POST /api/ownedcustomers/shared-address-owned
+POST /api/ownedcustomers/same-value-addresses
+GET /api/ownedcustomers/same-shipping-and-billing-address
+```
+
+Esto permite reproducir no sólo el resultado final, sino también las comparaciones entre Complex Types y Owned Types.
+
+---
+
+## Conclusión
+
+Los Complex Types no son nuevos en EF Core 10.
+
+Existen desde EF Core 8.
+
+Lo interesante en EF Core 10 es que el modelo continúa madurando y ahora podemos representar también Complex Types opcionales.
+
+En nuestro ejemplo eso nos permitió escribir algo tan natural como:
+
+```csharp
+public required Address ShippingAddress { get; set; }
+
+public Address? BillingAddress { get; set; }
+```
+
+y comprobar que esa diferencia recorre todo el stack:
+
+```text
+modelo C#
+→ migración
+→ columnas SQL
+→ datos NULL
+→ materialización
+```
+
+Pero el laboratorio mostró algo todavía más importante.
+
+Complex Types y Owned Types pueden producir esquemas de base de datos muy parecidos y, sin embargo, representar conceptos diferentes para EF Core.
+
+Con Complex Types:
+
+```text
+no hay identidad independiente
++
+las comparaciones son por contenido
++
+la misma instancia puede participar en varias propiedades
+```
+
+Con Owned Types:
+
+```text
+sigue existiendo semántica de entidad
++
+hay identidad interna
++
+la misma instancia no puede representar dos owned navigations diferentes
++
+las comparaciones son por identidad
+```
+
+Por eso la elección no debería depender solamente de cómo queremos que se vea la tabla.
+
+Debería depender de qué representa realmente ese objeto dentro de nuestro modelo.
+
+Si algo como `Address` existe principalmente por sus valores y no necesita identidad propia, los Complex Types expresan esa intención de una forma mucho más natural.
