@@ -57,9 +57,6 @@ export default function ArticlesExplorer({
 
 /* ============================================================
    READ SERIES FROM URL
-
-   Ejemplo:
-   /articulos?serie=EF%20Core%2010%20New%20Features
 ============================================================ */
 
 function ArticlesExplorerFromUrl({
@@ -167,9 +164,7 @@ function ArticlesExplorerContent({
                   article.title,
                   article.excerpt,
                   article.category,
-
                   article.series ?? "",
-
                   ...article.tags,
                 ].join(" "),
               );
@@ -207,8 +202,7 @@ function ArticlesExplorerContent({
         );
 
       /*
-       * Cuando estamos viendo una serie,
-       * el orden natural es:
+       * Cuando estamos viendo una serie concreta:
        *
        * Parte 1
        * Parte 2
@@ -218,52 +212,50 @@ function ArticlesExplorerContent({
 
       if (selectedSeries) {
         return [...result].sort(
-          (a, b) => {
-            const orderA =
-              a.seriesOrder ??
-              Number.MAX_SAFE_INTEGER;
-
-            const orderB =
-              b.seriesOrder ??
-              Number.MAX_SAFE_INTEGER;
-
-            if (orderA !== orderB) {
-              return (
-                orderA - orderB
-              );
-            }
-
-            return a.title.localeCompare(
-              b.title,
-              "es",
-            );
-          },
+          compareBySeriesOrder,
         );
       }
 
       /*
        * Orden normal de artículos.
+       *
+       * En "Más recientes", una serie se trata como un bloque:
+       *
+       * - el bloque se posiciona según la fecha más reciente
+       *   de sus artículos;
+       * - dentro de la serie se respeta seriesOrder.
+       *
+       * Así evitamos:
+       *
+       * Parte 2
+       * Parte 3
+       * Parte 1
+       *
+       * cuando varios artículos de la misma serie tienen
+       * fechas distintas o iguales.
        */
 
-      return [...result].sort(
-        (a, b) => {
-          if (sort === "oldest") {
-            return a.date.localeCompare(
+      if (sort === "recent") {
+        return sortRecentKeepingSeriesTogether(
+          result,
+        );
+      }
+
+      if (sort === "oldest") {
+        return [...result].sort(
+          (a, b) =>
+            a.date.localeCompare(
               b.date,
-            );
-          }
+            ),
+        );
+      }
 
-          if (sort === "title") {
-            return a.title.localeCompare(
-              b.title,
-              "es",
-            );
-          }
-
-          return b.date.localeCompare(
-            a.date,
-          );
-        },
+      return [...result].sort(
+        (a, b) =>
+          a.title.localeCompare(
+            b.title,
+            "es",
+          ),
       );
     }, [
       articles,
@@ -284,15 +276,6 @@ function ArticlesExplorerContent({
     setTag("Todos");
     setSort("recent");
 
-    /*
-     * Si llegamos desde:
-     *
-     * /articulos?serie=...
-     *
-     * también eliminamos el filtro
-     * de serie de la URL.
-     */
-
     if (selectedSeries) {
       router.replace(
         pathname,
@@ -309,10 +292,6 @@ function ArticlesExplorerContent({
 
   return (
     <>
-      {/* ======================================================
-          FILTERS
-      ====================================================== */}
-
       <div className={styles.filters}>
         <div className={styles.search}>
           <svg
@@ -342,10 +321,6 @@ function ArticlesExplorerContent({
         </div>
 
         <div className={styles.selects}>
-          {/* ================================================
-              TAG
-          ================================================ */}
-
           <label>
             <span>Tag</span>
 
@@ -369,10 +344,6 @@ function ArticlesExplorerContent({
               )}
             </select>
           </label>
-
-          {/* ================================================
-              ORDER
-          ================================================ */}
 
           <label>
             <span>Orden</span>
@@ -414,10 +385,6 @@ function ArticlesExplorerContent({
         </div>
       </div>
 
-      {/* ======================================================
-          CATEGORIES
-      ====================================================== */}
-
       <div className={styles.categories}>
         {categories.map(
           (currentCategory) => (
@@ -441,10 +408,6 @@ function ArticlesExplorerContent({
           ),
         )}
       </div>
-
-      {/* ======================================================
-          SUMMARY
-      ====================================================== */}
 
       <div className={styles.summary}>
         <p>
@@ -476,10 +439,6 @@ function ArticlesExplorerContent({
           </button>
         )}
       </div>
-
-      {/* ======================================================
-          RESULTS
-      ====================================================== */}
 
       {filteredArticles.length >
       0 ? (
@@ -530,15 +489,26 @@ function ArticleCard({
 }) {
   return (
     <article className={styles.card}>
-      {/* ======================================================
-          IMAGE
-      ====================================================== */}
-
       <Link
         href={`/articulos/${article.slug}`}
         className={styles.imageLink}
       >
         <div className={styles.image}>
+          {article.series &&
+            article.seriesOrder != null && (
+              <div
+                className={styles.partBadge}
+                title={`Parte ${article.seriesOrder} de ${article.series}`}
+                aria-label={`Parte ${article.seriesOrder} de la serie ${article.series}`}
+              >
+                <span>Parte</span>
+
+                <strong>
+                  {article.seriesOrder}
+                </strong>
+              </div>
+            )}
+
           {article.image ? (
             <Image
               src={article.image}
@@ -567,15 +537,7 @@ function ArticleCard({
         </div>
       </Link>
 
-      {/* ======================================================
-          CONTENT
-      ====================================================== */}
-
       <div className={styles.cardContent}>
-        {/* ====================================================
-            META
-        ==================================================== */}
-
         <div className={styles.cardMeta}>
           <span
             className={
@@ -602,10 +564,6 @@ function ArticleCard({
           </span>
         </div>
 
-        {/* ====================================================
-            TITLE
-        ==================================================== */}
-
         <h2>
           <Link
             href={`/articulos/${article.slug}`}
@@ -614,15 +572,7 @@ function ArticleCard({
           </Link>
         </h2>
 
-        {/* ====================================================
-            EXCERPT
-        ==================================================== */}
-
         <p>{article.excerpt}</p>
-
-        {/* ====================================================
-            TAGS
-        ==================================================== */}
 
         <div className={styles.cardTags}>
           {article.tags
@@ -633,10 +583,6 @@ function ArticleCard({
               </span>
             ))}
         </div>
-
-        {/* ====================================================
-            SERIES
-        ==================================================== */}
 
         {article.series && (
           <div
@@ -683,10 +629,6 @@ function ArticleCard({
           </div>
         )}
 
-        {/* ====================================================
-            READ ARTICLE
-        ==================================================== */}
-
         <Link
           href={`/articulos/${article.slug}`}
           className={styles.readMore}
@@ -698,6 +640,130 @@ function ArticleCard({
       </div>
     </article>
   );
+}
+
+/* ============================================================
+   SORT - SERIES
+============================================================ */
+
+function compareBySeriesOrder(
+  a: ArticleMetadata,
+  b: ArticleMetadata,
+) {
+  const orderA =
+    a.seriesOrder ??
+    Number.MAX_SAFE_INTEGER;
+
+  const orderB =
+    b.seriesOrder ??
+    Number.MAX_SAFE_INTEGER;
+
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+
+  return a.title.localeCompare(
+    b.title,
+    "es",
+  );
+}
+
+/* ============================================================
+   SORT - RECENT KEEPING SERIES AS BLOCKS
+============================================================ */
+
+function sortRecentKeepingSeriesTogether(
+  articles: ArticleMetadata[],
+): ArticleMetadata[] {
+  type ArticleGroup = {
+    key: string;
+    articles: ArticleMetadata[];
+    newestDate: string;
+    originalIndex: number;
+  };
+
+  const groups =
+    new Map<string, ArticleGroup>();
+
+  articles.forEach(
+    (article, index) => {
+      const key =
+        article.series
+          ? `series:${article.series}`
+          : `article:${article.slug}`;
+
+      const existingGroup =
+        groups.get(key);
+
+      if (existingGroup) {
+        existingGroup.articles.push(
+          article,
+        );
+
+        if (
+          article.date >
+          existingGroup.newestDate
+        ) {
+          existingGroup.newestDate =
+            article.date;
+        }
+
+        return;
+      }
+
+      groups.set(
+        key,
+        {
+          key,
+          articles: [article],
+          newestDate: article.date,
+          originalIndex: index,
+        },
+      );
+    },
+  );
+
+  return Array.from(
+    groups.values(),
+  )
+    .sort(
+      (a, b) => {
+        const dateComparison =
+          b.newestDate.localeCompare(
+            a.newestDate,
+          );
+
+        if (dateComparison !== 0) {
+          return dateComparison;
+        }
+
+        return (
+          a.originalIndex -
+          b.originalIndex
+        );
+      },
+    )
+    .flatMap(
+      (group) => {
+        if (
+          group.articles.length > 1 &&
+          group.articles.every(
+            (article) =>
+              article.series != null,
+          )
+        ) {
+          return [
+              ...group.articles,
+            ].sort(
+              (a, b) =>
+                (b.seriesOrder ?? 0) -
+                (a.seriesOrder ?? 0),
+            );
+        }
+
+        return group.articles;
+      },
+    );
 }
 
 /* ============================================================

@@ -636,3 +636,116 @@
     gap: 0.65rem;
   }
 }
+
+
+/* ============================================================
+   SERIES PART BADGE
+============================================================ */
+
+.partBadge {
+  position: absolute;
+
+  top: 14px;
+  right: 14px;
+
+  z-index: 3;
+
+  width: 54px;
+  height: 54px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 1px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.46);
+
+  border-radius: 50%;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(48, 121, 239, 0.97),
+      rgba(24, 82, 190, 0.97)
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    0 10px 26px
+      rgba(9, 29, 62, 0.28),
+    inset 0 1px 0
+      rgba(255, 255, 255, 0.25);
+
+  backdrop-filter:
+    blur(8px);
+
+  pointer-events: none;
+}
+
+.partBadge::after {
+  content: "";
+
+  position: absolute;
+
+  inset: 4px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.19);
+
+  border-radius: 50%;
+}
+
+.partBadge span {
+  position: relative;
+
+  z-index: 1;
+
+  font-size: 6px;
+
+  line-height: 1;
+
+  font-weight: 800;
+
+  letter-spacing: 0.16em;
+
+  text-transform: uppercase;
+
+  opacity: 0.82;
+}
+
+.partBadge strong {
+  position: relative;
+
+  z-index: 1;
+
+  font-size: 19px;
+
+  line-height: 1;
+
+  font-weight: 850;
+
+  letter-spacing: -0.04em;
+}
+
+@media (max-width: 650px) {
+  .partBadge {
+    top: 12px;
+    right: 12px;
+
+    width: 48px;
+    height: 48px;
+  }
+
+  .partBadge strong {
+    font-size: 17px;
+  }
+}
