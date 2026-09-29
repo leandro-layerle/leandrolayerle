@@ -2,6 +2,14 @@ import type { ComponentType } from "react";
 
 import type { ArticleMetadata } from "@/types/article";
 
+import ArticleContent, {
+  article as rawArticleMetadata,
+} from "./ef-core-10-named-query-filters.mdx";
+
+/* ============================================================
+   TYPES
+============================================================ */
+
 type ArticleModule = {
   default: ComponentType;
   article: ArticleMetadata;
@@ -12,58 +20,46 @@ export type RegisteredArticle = {
   load: () => Promise<ArticleModule>;
 };
 
-/*
- * Metadata de todos los .mdx de esta carpeta.
- */
-const metadataModules = import.meta.glob("./*.mdx", {
-  eager: true,
-  import: "article",
-}) as Record<string, ArticleMetadata>;
+/* ============================================================
+   CURRENT ARTICLE
 
-/*
- * Contenido completo de los artículos.
- * Se carga solamente cuando se necesita.
- */
-const articleModules = import.meta.glob("./*.mdx") as Record<
-  string,
-  () => Promise<unknown>
->;
+   El MDX expone:
+   - default -> componente React
+   - article -> metadata
 
-/*
- * Registro generado automáticamente.
- */
-const registeredArticles: RegisteredArticle[] = Object.entries(
-  metadataModules,
-)
-  .map(([path, metadata]) => {
-    const loader = articleModules[path];
+   Hacemos el cast explícito porque el tipado generado
+   automáticamente para MDX no conoce nuestra estructura.
+============================================================ */
 
-    if (!loader) {
-      return null;
-    }
+const efCore10NamedQueryFiltersMetadata =
+  rawArticleMetadata as unknown as ArticleMetadata;
 
-    return {
-      metadata,
+const EfCore10NamedQueryFiltersContent =
+  ArticleContent as ComponentType;
 
-      load: async () => {
-        const articleModule =
-          (await loader()) as ArticleModule;
+/* ============================================================
+   ARTICLE REGISTRY
+============================================================ */
 
-        return articleModule;
-      },
-    };
-  })
-  .filter(
-    (
-      registeredArticle,
-    ): registeredArticle is RegisteredArticle =>
-      registeredArticle !== null,
-  );
+const registeredArticles: RegisteredArticle[] = [
+  {
+    metadata:
+      efCore10NamedQueryFiltersMetadata,
 
-/*
- * Devuelve todos los artículos publicados,
- * ordenados del más reciente al más antiguo.
- */
+    load: async () => ({
+      default:
+        EfCore10NamedQueryFiltersContent,
+
+      article:
+        efCore10NamedQueryFiltersMetadata,
+    }),
+  },
+];
+
+/* ============================================================
+   GET ALL ARTICLES
+============================================================ */
+
 export function getAllArticles(): ArticleMetadata[] {
   return registeredArticles
     .filter(
@@ -79,9 +75,10 @@ export function getAllArticles(): ArticleMetadata[] {
     );
 }
 
-/*
- * Busca un artículo por slug.
- */
+/* ============================================================
+   GET ARTICLE BY SLUG
+============================================================ */
+
 export function getArticleBySlug(
   slug: string,
 ): RegisteredArticle | undefined {
@@ -92,9 +89,10 @@ export function getArticleBySlug(
   );
 }
 
-/*
- * Slugs utilizados por generateStaticParams().
- */
+/* ============================================================
+   GET ALL SLUGS
+============================================================ */
+
 export function getAllArticleSlugs(): string[] {
   return registeredArticles
     .filter(
