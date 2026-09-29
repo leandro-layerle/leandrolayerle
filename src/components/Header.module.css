@@ -1,0 +1,504 @@
+.header {
+  position: relative;
+
+  z-index: 100;
+
+  border-top: 2px solid #172735;
+
+  background:
+    rgba(250, 248, 244, 0.96);
+
+  backdrop-filter: blur(14px);
+}
+
+.container {
+  position: relative;
+
+  z-index: 103;
+
+  width:
+    min(
+      1400px,
+      calc(100% - 80px)
+    );
+
+  min-height: 94px;
+
+  margin: 0 auto;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 50px;
+}
+
+/* ============================================================
+   BRAND
+============================================================ */
+
+.brand {
+  flex: 0 0 auto;
+
+  display: flex;
+
+  flex-direction: column;
+
+  text-decoration: none;
+}
+
+.name {
+  font-size: 21px;
+
+  line-height: 1;
+
+  font-weight: 500;
+
+  letter-spacing: 0.17em;
+
+  color: #081522;
+}
+
+.tagline {
+  margin-top: 8px;
+
+  font-size: 8px;
+
+  font-weight: 500;
+
+  letter-spacing: 0.29em;
+
+  text-transform: uppercase;
+
+  color: #5d6f7d;
+}
+
+/* ============================================================
+   DESKTOP NAV
+============================================================ */
+
+.desktopNav {
+  display: flex;
+
+  align-items: center;
+
+  gap: 32px;
+}
+
+.desktopNav > a {
+  position: relative;
+
+  font-size: 13px;
+
+  font-weight: 500;
+
+  color: #17212a;
+
+  transition:
+    color 150ms ease;
+}
+
+.desktopNav
+  > a:not(.contact)::after {
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+  right: 100%;
+
+  bottom: -8px;
+
+  height: 1px;
+
+  background: #1769e8;
+
+  transition:
+    right 180ms ease;
+}
+
+.desktopNav
+  > a:not(.contact):hover {
+  color: #1769e8;
+}
+
+.desktopNav
+  > a:not(.contact):hover::after {
+  right: 0;
+}
+
+/* ============================================================
+   CONTACT
+============================================================ */
+
+.desktopNav .contact {
+  min-height: 46px;
+
+  padding: 0 19px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 18px;
+
+  border-radius: 10px;
+
+  background: #0a1723;
+
+  box-shadow:
+    0 7px 18px
+      rgba(8, 19, 31, 0.12);
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  color: #ffffff;
+
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.desktopNav .contact:hover {
+  background: #1769e8;
+
+  color: #ffffff;
+
+  transform: translateY(-1px);
+}
+
+.contact span {
+  font-size: 17px;
+
+  font-weight: 400;
+}
+
+/* ============================================================
+   MOBILE BUTTON
+============================================================ */
+
+.menuButton {
+  display: none;
+
+  width: 46px;
+  height: 46px;
+
+  padding: 0;
+
+  border: 1px solid
+    rgba(14, 31, 48, 0.12);
+
+  border-radius: 10px;
+
+  background: transparent;
+
+  cursor: pointer;
+}
+
+.menuButton span {
+  position: absolute;
+
+  left: 50%;
+
+  width: 20px;
+  height: 1.5px;
+
+  background: #0b1723;
+
+  transform:
+    translateX(-50%);
+
+  transition:
+    transform 200ms ease,
+    top 200ms ease;
+}
+
+.menuButton span:first-child {
+  top: 18px;
+}
+
+.menuButton span:last-child {
+  top: 26px;
+}
+
+.menuButtonOpen span:first-child {
+  top: 22px;
+
+  transform:
+    translateX(-50%)
+    rotate(45deg);
+}
+
+.menuButtonOpen span:last-child {
+  top: 22px;
+
+  transform:
+    translateX(-50%)
+    rotate(-45deg);
+}
+
+/* ============================================================
+   MOBILE MENU
+============================================================ */
+
+.mobileMenu {
+  display: none;
+}
+
+.backdrop {
+  display: none;
+}
+
+/* ============================================================
+   TABLET
+============================================================ */
+
+@media (max-width: 1150px) {
+  .container {
+    width:
+      calc(100% - 48px);
+  }
+
+  .desktopNav {
+    gap: 20px;
+  }
+
+  .desktopNav > a {
+    font-size: 12px;
+  }
+
+  .name {
+    font-size: 18px;
+  }
+}
+
+/* ============================================================
+   MOBILE
+============================================================ */
+
+@media (max-width: 900px) {
+  .header {
+    position: relative;
+
+    border-top: 0;
+  }
+
+  .container {
+    width:
+      calc(100% - 40px);
+
+    min-height: 82px;
+
+    background:
+      rgba(250, 248, 244, 0.98);
+  }
+
+  .desktopNav {
+    display: none;
+  }
+
+  .menuButton {
+    position: relative;
+
+    z-index: 104;
+
+    display: block;
+  }
+
+  .mobileMenu {
+    position: absolute;
+
+    z-index: 102;
+
+    top: 82px;
+    left: 0;
+    right: 0;
+
+    min-height:
+      calc(100vh - 82px);
+
+    padding:
+      24px 20px 35px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: space-between;
+
+    background: #faf8f4;
+
+    opacity: 0;
+
+    visibility: hidden;
+
+    transform:
+      translateY(-12px);
+
+    pointer-events: none;
+
+    transition:
+      opacity 180ms ease,
+      visibility 180ms ease,
+      transform 180ms ease;
+  }
+
+  .mobileMenuOpen {
+    opacity: 1;
+
+    visibility: visible;
+
+    transform:
+      translateY(0);
+
+    pointer-events: auto;
+  }
+
+  .mobileNav {
+    display: flex;
+
+    flex-direction: column;
+
+    border-top:
+      1px solid
+      rgba(10, 23, 35, 0.1);
+  }
+
+  .mobileNav a {
+    min-height: 68px;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 22px;
+
+    border-bottom:
+      1px solid
+      rgba(10, 23, 35, 0.1);
+
+    font-family:
+      var(--font-serif);
+
+    font-size: 27px;
+
+    font-weight: 500;
+
+    letter-spacing:
+      -0.025em;
+
+    color: #0b1723;
+  }
+
+  .mobileNav a span {
+    width: 24px;
+
+    font-family:
+      var(--font-sans);
+
+    font-size: 8px;
+
+    font-weight: 700;
+
+    letter-spacing:
+      0.14em;
+
+    color: #1769e8;
+  }
+
+  .mobileBottom {
+    padding-top: 40px;
+  }
+
+  .mobileBottom p {
+    max-width: 290px;
+
+    margin:
+      0 0 20px;
+
+    font-size: 13px;
+
+    line-height: 1.6;
+
+    color: #65717b;
+  }
+
+  .mobileContact {
+    min-height: 52px;
+
+    padding: 0 20px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content:
+      space-between;
+
+    border-radius: 9px;
+
+    background: #1769e8;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    color: #ffffff;
+  }
+
+  .mobileContact span {
+    font-size: 20px;
+  }
+
+  .backdrop {
+    position: fixed;
+
+    z-index: 101;
+
+    inset: 82px 0 0;
+
+    display: block;
+
+    border: 0;
+
+    background:
+      rgba(4, 12, 20, 0.4);
+  }
+}
+
+/* ============================================================
+   SMALL MOBILE
+============================================================ */
+
+@media (max-width: 500px) {
+  .container {
+    width:
+      calc(100% - 30px);
+  }
+
+  .name {
+    font-size: 16px;
+
+    letter-spacing:
+      0.14em;
+  }
+
+  .tagline {
+    font-size: 7px;
+
+    letter-spacing:
+      0.22em;
+  }
+
+  .mobileNav a {
+    min-height: 64px;
+
+    font-size: 25px;
+  }
+}

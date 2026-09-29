@@ -1,0 +1,1197 @@
+.page {
+  background: #faf8f4;
+
+  color: #0b1724;
+}
+
+/* ============================================================
+   GENERALES
+============================================================ */
+
+.container {
+  width:
+    min(
+      1400px,
+      calc(100% - 80px)
+    );
+
+  margin: 0 auto;
+}
+
+.eyebrow,
+.darkEyebrow {
+  display: flex;
+
+  align-items: center;
+
+  gap: 15px;
+}
+
+.eyebrow span,
+.darkEyebrow span {
+  font-size: 9px;
+
+  font-weight: 700;
+
+  letter-spacing: 0.27em;
+
+  text-transform: uppercase;
+}
+
+.eyebrow span {
+  color: #1769e8;
+}
+
+.darkEyebrow span {
+  color: #79aaff;
+}
+
+.eyebrow i,
+.darkEyebrow i {
+  width: 55px;
+  height: 1px;
+
+  background: #387ddf;
+}
+
+/* ============================================================
+   HERO
+============================================================ */
+
+.hero {
+  min-height: 760px;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(480px, 48%)
+    minmax(0, 52%);
+
+  background: #faf8f4;
+}
+
+/* ============================================================
+   HERO IMAGE
+============================================================ */
+
+.heroVisual {
+  position: relative;
+
+  min-height: 760px;
+
+  overflow: hidden;
+
+  background: #172330;
+}
+
+.heroImage {
+  object-fit: cover;
+
+  object-position: center center;
+}
+
+.heroVisual::after {
+  content: "";
+
+  position: absolute;
+
+  inset: 0;
+
+  background:
+    linear-gradient(
+      180deg,
+      transparent 45%,
+      rgba(4, 13, 22, 0.35) 100%
+    );
+
+  pointer-events: none;
+}
+
+/* ============================================================
+   QUOTE
+============================================================ */
+
+.quote {
+  position: absolute;
+
+  z-index: 3;
+
+  left: 8%;
+  bottom: 7%;
+
+  width: min(
+    420px,
+    calc(100% - 70px)
+  );
+
+  padding: 28px 30px 25px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.12);
+
+  border-radius: 13px;
+
+  background:
+    rgba(7, 19, 31, 0.9);
+
+  backdrop-filter: blur(12px);
+
+  color: #ffffff;
+}
+
+.quoteMark {
+  position: absolute;
+
+  top: 3px;
+  left: 18px;
+
+  font-family:
+    var(--font-serif);
+
+  font-size: 65px;
+
+  color:
+    rgba(66, 136, 238, 0.45);
+}
+
+.quote p {
+  position: relative;
+
+  margin: 0;
+
+  font-family:
+    var(--font-serif);
+
+  font-size: 19px;
+
+  line-height: 1.35;
+
+  font-style: italic;
+}
+
+.quote strong {
+  display: block;
+
+  margin-top: 17px;
+
+  font-size: 8px;
+
+  letter-spacing: 0.2em;
+
+  text-transform: uppercase;
+
+  color:
+    rgba(255, 255, 255, 0.55);
+}
+
+/* ============================================================
+   HERO CONTENT
+============================================================ */
+
+.heroContent {
+  padding:
+    85px 4.8vw;
+
+  display: flex;
+
+  align-items: center;
+
+  background:
+    radial-gradient(
+      circle at 95% 5%,
+      rgba(30, 104, 220, 0.05),
+      transparent 35%
+    ),
+    #faf8f4;
+}
+
+.heroContentInner {
+  width:
+    min(720px, 100%);
+}
+
+.heroContent h1 {
+  margin:
+    25px 0 0;
+
+  font-family:
+    var(--font-serif);
+
+  font-size:
+    clamp(
+      51px,
+      4.7vw,
+      72px
+    );
+
+  line-height: 0.94;
+
+  font-weight: 500;
+
+  letter-spacing: -0.045em;
+
+  color: #0c1725;
+}
+
+.heroContent h1 em {
+  font-weight: 500;
+
+  color: #1769e8;
+}
+
+.heroDescription {
+  max-width: 620px;
+
+  margin:
+    28px 0 0;
+
+  font-size: 17px;
+
+  line-height: 1.65;
+
+  color: #65717c;
+}
+
+/* ============================================================
+   HERO ACTIONS
+============================================================ */
+
+.heroActions {
+  margin-top: 34px;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 27px;
+}
+
+.primaryButton {
+  min-height: 55px;
+
+  min-width: 205px;
+
+  padding:
+    0 22px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content:
+    space-between;
+
+  gap: 30px;
+
+  border-radius: 10px;
+
+  background: #1269ec;
+
+  box-shadow:
+    0 12px 25px
+    rgba(18, 105, 236, 0.17);
+
+  font-size: 14px;
+
+  font-weight: 600;
+
+  color: #ffffff;
+
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.primaryButton:hover {
+  background: #0759cf;
+
+  transform:
+    translateY(-1px);
+}
+
+.primaryButton span {
+  font-size: 20px;
+}
+
+.secondaryButton {
+  padding-bottom: 3px;
+
+  border-bottom:
+    1px solid
+    rgba(17, 34, 49, 0.25);
+
+  font-size: 13px;
+
+  font-weight: 600;
+
+  color: #172531;
+}
+
+.secondaryButton:hover {
+  color: #1769e8;
+
+  border-color: #1769e8;
+}
+
+/* ============================================================
+   HERO STATEMENT
+============================================================ */
+
+.heroStatement {
+  margin-top: 52px;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 19px;
+}
+
+.heroStatement > span {
+  width: 65px;
+  height: 1px;
+
+  background: #2374e9;
+}
+
+.heroStatement p {
+  margin: 0;
+
+  font-size: 8px;
+
+  line-height: 1.6;
+
+  font-weight: 650;
+
+  letter-spacing: 0.25em;
+
+  text-transform: uppercase;
+
+  color: #6e8196;
+}
+
+/* ============================================================
+   INTRO
+============================================================ */
+
+.intro {
+  padding:
+    125px 0;
+
+  background: #ffffff;
+}
+
+.intro .container {
+  display: grid;
+
+  grid-template-columns:
+    0.62fr 1.38fr;
+
+  gap: 100px;
+}
+
+.introLabel {
+  padding-top: 10px;
+
+  font-size: 9px;
+
+  line-height: 1.7;
+
+  font-weight: 700;
+
+  letter-spacing: 0.23em;
+
+  text-transform: uppercase;
+
+  color: #1769e8;
+}
+
+.introContent h2 {
+  margin: 0;
+
+  font-family:
+    var(--font-serif);
+
+  font-size:
+    clamp(
+      45px,
+      4.5vw,
+      65px
+    );
+
+  line-height: 0.98;
+
+  font-weight: 500;
+
+  letter-spacing: -0.04em;
+
+  color: #0b1724;
+}
+
+.introLead {
+  max-width: 750px;
+
+  margin:
+    25px 0 0;
+
+  font-size: 21px;
+
+  line-height: 1.55;
+
+  color: #2d3a45;
+}
+
+.introText {
+  max-width: 800px;
+
+  margin-top: 32px;
+
+  display: grid;
+
+  grid-template-columns:
+    1fr 1fr;
+
+  gap: 40px;
+}
+
+.introText p {
+  margin: 0;
+
+  font-size: 14px;
+
+  line-height: 1.75;
+
+  color: #6b7680;
+}
+
+/* ============================================================
+   PARA QUIÉN
+============================================================ */
+
+.forWho {
+  padding:
+    110px 0 120px;
+
+  background:
+    radial-gradient(
+      circle at 90% 10%,
+      rgba(28, 103, 225, 0.16),
+      transparent 30%
+    ),
+    #07131f;
+
+  color: #ffffff;
+}
+
+.sectionHeading {
+  max-width: 760px;
+}
+
+.sectionHeading h2 {
+  margin:
+    22px 0 0;
+
+  font-family:
+    var(--font-serif);
+
+  font-size:
+    clamp(
+      46px,
+      4.6vw,
+      66px
+    );
+
+  line-height: 0.97;
+
+  font-weight: 500;
+
+  letter-spacing: -0.045em;
+}
+
+.sectionHeading > p {
+  max-width: 590px;
+
+  margin:
+    22px 0 0;
+
+  font-size: 15px;
+
+  line-height: 1.7;
+
+  color:
+    rgba(255, 255, 255, 0.55);
+}
+
+.forWhoGrid {
+  margin-top: 60px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.12);
+
+  border-bottom:
+    1px solid
+    rgba(255, 255, 255, 0.12);
+}
+
+.forWhoGrid article {
+  min-height: 290px;
+
+  padding:
+    30px 28px;
+
+  border-right:
+    1px solid
+    rgba(255, 255, 255, 0.12);
+}
+
+.forWhoGrid article:last-child {
+  border-right: 0;
+}
+
+.forWhoGrid article > span {
+  font-size: 9px;
+
+  font-weight: 700;
+
+  letter-spacing: 0.15em;
+
+  color: #5797fa;
+}
+
+.forWhoGrid h3 {
+  margin:
+    45px 0 0;
+
+  max-width: 245px;
+
+  font-size: 20px;
+
+  line-height: 1.22;
+
+  font-weight: 600;
+}
+
+.forWhoGrid p {
+  max-width: 250px;
+
+  margin:
+    18px 0 0;
+
+  font-size: 13px;
+
+  line-height: 1.65;
+
+  color:
+    rgba(255, 255, 255, 0.48);
+}
+
+/* ============================================================
+   AREAS
+============================================================ */
+
+.areas {
+  padding:
+    120px 0;
+
+  background: #faf8f4;
+}
+
+.areasHeader {
+  display: grid;
+
+  grid-template-columns:
+    1.2fr 0.8fr;
+
+  align-items: end;
+
+  gap: 90px;
+}
+
+.areasHeader h2 {
+  margin:
+    21px 0 0;
+
+  font-family:
+    var(--font-serif);
+
+  font-size:
+    clamp(
+      46px,
+      4.5vw,
+      64px
+    );
+
+  line-height: 0.98;
+
+  font-weight: 500;
+
+  letter-spacing: -0.045em;
+
+  color: #0b1724;
+}
+
+.areasHeader > p {
+  max-width: 530px;
+
+  margin: 0;
+
+  font-size: 14px;
+
+  line-height: 1.75;
+
+  color: #697681;
+}
+
+.areasGrid {
+  margin-top: 55px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 17px;
+}
+
+.areaCard {
+  min-height: 175px;
+
+  padding:
+    27px 30px;
+
+  display: grid;
+
+  grid-template-columns:
+    78px 1fr;
+
+  align-items: center;
+
+  gap: 24px;
+
+  border:
+    1px solid #dfe2e5;
+
+  border-radius: 12px;
+
+  background:
+    rgba(255, 255, 255, 0.58);
+
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.areaCard:hover {
+  transform:
+    translateY(-2px);
+
+  background: #ffffff;
+
+  box-shadow:
+    0 16px 38px
+    rgba(24, 39, 55, 0.07);
+}
+
+/*
+ * LOS ICONOS CONSERVAN LA MISMA RELACIÓN
+ * QUE EN LA HOME.
+ */
+
+.areaIcon {
+  width: 70px;
+  height: 70px;
+
+  aspect-ratio: 1 / 1;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #e7f1ff;
+
+  color: #0b6cf0;
+}
+
+.areaIcon svg {
+  width: 40px;
+  height: 40px;
+
+  aspect-ratio: 1 / 1;
+
+  fill: none;
+
+  stroke: currentColor;
+
+  stroke-width: 2.5;
+
+  stroke-linecap: round;
+
+  stroke-linejoin: round;
+
+  vector-effect:
+    non-scaling-stroke;
+}
+
+.areaCard h3 {
+  margin: 0;
+
+  font-size: 19px;
+
+  line-height: 1.2;
+
+  font-weight: 700;
+}
+
+.areaCard p {
+  max-width: 460px;
+
+  margin:
+    9px 0 0;
+
+  font-size: 13px;
+
+  line-height: 1.6;
+
+  color: #697681;
+}
+
+/* ============================================================
+   PROCESS
+============================================================ */
+
+.process {
+  padding:
+    115px 0 120px;
+
+  background: #0b1927;
+
+  color: #ffffff;
+}
+
+.processHeader h2 {
+  max-width: 850px;
+
+  margin:
+    23px 0 0;
+
+  font-family:
+    var(--font-serif);
+
+  font-size:
+    clamp(
+      48px,
+      5vw,
+      70px
+    );
+
+  line-height: 0.94;
+
+  font-weight: 500;
+
+  letter-spacing: -0.045em;
+}
+
+.processHeader h2 em {
+  color: #68a1f9;
+}
+
+.processGrid {
+  margin-top: 65px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.12);
+}
+
+.processCard {
+  min-height: 245px;
+
+  padding:
+    28px 31px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: space-between;
+
+  border-right:
+    1px solid
+    rgba(255, 255, 255, 0.12);
+}
+
+.processCard:last-child {
+  border-right: 0;
+}
+
+.processNumber {
+  font-size: 10px;
+
+  font-weight: 700;
+
+  letter-spacing: 0.16em;
+
+  color: #6fa7ff;
+}
+
+.processCard h3 {
+  margin: 0;
+
+  font-size: 20px;
+
+  font-weight: 600;
+}
+
+.processCard p {
+  max-width: 320px;
+
+  margin:
+    13px 0 0;
+
+  font-size: 13px;
+
+  line-height: 1.7;
+
+  color:
+    rgba(255, 255, 255, 0.5);
+}
+
+/* ============================================================
+   CTA
+============================================================ */
+
+.cta {
+  padding:
+    100px 0;
+
+  background: #faf8f4;
+}
+
+.ctaInner {
+  width:
+    min(
+      1400px,
+      calc(100% - 80px)
+    );
+
+  margin: 0 auto;
+
+  padding:
+    65px 70px;
+
+  display: grid;
+
+  grid-template-columns:
+    1.2fr 0.8fr;
+
+  align-items: end;
+
+  gap: 80px;
+
+  border-radius: 18px;
+
+  background: #ffffff;
+
+  border:
+    1px solid #e0e2e4;
+
+  box-shadow:
+    0 25px 65px
+    rgba(21, 35, 50, 0.06);
+}
+
+.cta h2 {
+  margin:
+    22px 0 0;
+
+  font-family:
+    var(--font-serif);
+
+  font-size:
+    clamp(
+      43px,
+      4.3vw,
+      61px
+    );
+
+  line-height: 0.98;
+
+  font-weight: 500;
+
+  letter-spacing: -0.04em;
+
+  color: #0b1724;
+}
+
+.ctaRight {
+  max-width: 460px;
+}
+
+.ctaRight p {
+  margin:
+    0 0 27px;
+
+  font-size: 14px;
+
+  line-height: 1.7;
+
+  color: #687580;
+}
+
+/* ============================================================
+   TABLET
+============================================================ */
+
+@media (max-width: 1050px) {
+  .container {
+    width:
+      calc(100% - 48px);
+  }
+
+  .hero {
+    grid-template-columns:
+      43% 57%;
+  }
+
+  .heroContent {
+    padding:
+      70px 40px;
+  }
+
+  .intro .container {
+    gap: 55px;
+  }
+
+  .forWhoGrid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .forWhoGrid article:nth-child(2) {
+    border-right: 0;
+  }
+
+  .forWhoGrid article:nth-child(-n + 2) {
+    border-bottom:
+      1px solid
+      rgba(255, 255, 255, 0.12);
+  }
+
+  .ctaInner {
+    width:
+      calc(100% - 48px);
+
+    padding:
+      55px 45px;
+  }
+}
+
+/* ============================================================
+   MOBILE
+============================================================ */
+
+@media (max-width: 800px) {
+  .container {
+    width:
+      calc(100% - 36px);
+  }
+
+  .hero {
+    display: flex;
+
+    flex-direction: column;
+  }
+
+  .heroVisual {
+    min-height: 630px;
+  }
+
+  .heroContent {
+    padding:
+      58px 24px 70px;
+  }
+
+  .heroContent h1 {
+    font-size: 48px;
+  }
+
+  .intro {
+    padding:
+      80px 0;
+  }
+
+  .intro .container {
+    grid-template-columns: 1fr;
+
+    gap: 30px;
+  }
+
+  .introText {
+    grid-template-columns: 1fr;
+
+    gap: 20px;
+  }
+
+  .forWho {
+    padding:
+      80px 0;
+  }
+
+  .forWhoGrid {
+    grid-template-columns: 1fr;
+
+    margin-top: 45px;
+  }
+
+  .forWhoGrid article {
+    min-height: auto;
+
+    padding:
+      28px 15px 32px;
+
+    border-right: 0;
+
+    border-bottom:
+      1px solid
+      rgba(255, 255, 255, 0.12);
+  }
+
+  .forWhoGrid article:last-child {
+    border-bottom: 0;
+  }
+
+  .forWhoGrid h3 {
+    margin-top: 28px;
+  }
+
+  .areas {
+    padding:
+      80px 0;
+  }
+
+  .areasHeader {
+    grid-template-columns: 1fr;
+
+    gap: 28px;
+  }
+
+  .areasGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .process {
+    padding:
+      80px 0;
+  }
+
+  .processGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .processCard {
+    min-height: 190px;
+
+    border-right: 0;
+
+    border-bottom:
+      1px solid
+      rgba(255, 255, 255, 0.12);
+  }
+
+  .processCard:last-child {
+    border-bottom: 0;
+  }
+
+  .cta {
+    padding:
+      60px 0;
+  }
+
+  .ctaInner {
+    width:
+      calc(100% - 36px);
+
+    padding:
+      42px 25px;
+
+    grid-template-columns: 1fr;
+
+    gap: 35px;
+  }
+}
+
+@media (max-width: 520px) {
+  .heroVisual {
+    min-height: 560px;
+  }
+
+  .quote {
+    left: 20px;
+    right: 20px;
+
+    width: auto;
+
+    bottom: 25px;
+  }
+
+  .heroContent h1 {
+    font-size: 42px;
+  }
+
+  .heroActions {
+    align-items: stretch;
+
+    flex-direction: column;
+  }
+
+  .primaryButton {
+    width: 100%;
+  }
+
+  .secondaryButton {
+    width: fit-content;
+  }
+
+  .heroStatement {
+    margin-top: 38px;
+  }
+
+  .areaCard {
+    min-height: 150px;
+
+    padding:
+      22px 20px;
+
+    grid-template-columns:
+      67px 1fr;
+
+    gap: 18px;
+  }
+
+  .areaIcon {
+    width: 62px;
+    height: 62px;
+  }
+
+  .areaIcon svg {
+    width: 35px;
+    height: 35px;
+  }
+}

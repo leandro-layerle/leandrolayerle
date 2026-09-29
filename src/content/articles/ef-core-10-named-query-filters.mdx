@@ -1,0 +1,737 @@
+export const article = {
+  title: "EF Core 10: Named Query Filters para Soft Delete y Multi-Tenancy",
+
+  slug: "ef-core-10-named-query-filters",
+
+  excerpt:
+    "Cómo EF Core 10 permite administrar de forma independiente filtros globales como Soft Delete y Multi-Tenancy.",
+
+  category: "EF Core",
+
+  tags: [
+    ".NET 10",
+    "EF Core 10",
+    "C#",
+    "SQL",
+    "Multi-Tenancy",
+    "Soft Delete",
+  ],
+
+  date: "2026-09-28",
+
+  readingTime: "14 min",
+
+  image: "/images/articles/ef-core-10-named-query-filters.png",
+
+  repository: "https://github.com/leandro-layerle/EfCore10Labs/tree/main/01-NamedQueryFilters",
+
+  published: true,
+
+  series: "EF Core 10 New Features",
+  seriesOrder: 1,
+};
+
+Los Global Query Filters de Entity Framework Core son especialmente útiles cuando existen condiciones que deberían aplicarse automáticamente a prácticamente todas las consultas de una entidad.
+
+Dos casos muy habituales son:
+
+- Soft Delete.
+- Multi-Tenancy.
+
+El problema aparece cuando necesitamos ambas cosas al mismo tiempo.
+
+Supongamos una aplicación SaaS donde cada pedido pertenece a un tenant:
+
+```csharp
+public class Order
+{
+    public int Id { get; set; }
+
+    public string Description { get; set; } = string.Empty;
+
+    public int TenantId { get; set; }
+
+    public bool IsDeleted { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+}
+```
+
+Tenemos dos reglas independientes:
+
+- El usuario sólo puede consultar pedidos de su tenant.
+- Los pedidos eliminados lógicamente no deberían aparecer normalmente.
+
+Hasta EF Core 9 podíamos resolver ambas condiciones mediante un Global Query Filter:
+
+```csharp
+modelBuilder.Entity<Order>()
+    .HasQueryFilter(order =>
+        !order.IsDeleted &&
+        order.TenantId == CurrentTenantId);
+```
+
+Funciona.
+
+Pero ambas reglas quedaron convertidas en **un único filtro**.
+
+Y ahí aparece el problema.
+
+---
+
+## El problema: necesito desactivar una regla, pero no la otra
+
+Imaginemos que estamos desarrollando una pantalla similar a una papelera de reciclaje.
+
+Un administrador del tenant necesita consultar también sus pedidos eliminados.
+
+Queremos quitar temporalmente:
+
+```text
+IsDeleted == false
+```
+
+pero debemos conservar:
+
+```text
+TenantId == CurrentTenantId
+```
+
+La consulta normal de nuestra API es:
+
+```csharp
+var orders = await _context.Orders
+    .OrderBy(order => order.Id)
+    .ToListAsync();
+```
+
+Con el filtro combinado activo, EF Core genera SQL equivalente a:
+
+```sql
+SELECT [o].[Id],
+       [o].[CreatedAt],
+       [o].[Description],
+       [o].[IsDeleted],
+       [o].[TenantId]
+FROM [Orders] AS [o]
+WHERE [o].[IsDeleted] = CAST(0 AS bit)
+  AND [o].[TenantId] = @CurrentTenantId
+ORDER BY [o].[Id]
+```
+
+Para un tenant con `CurrentTenantId = 1`, esta consulta devuelve únicamente los pedidos activos de ese tenant.
+
+En nuestro ejemplo:
+
+```text
+Order 1 - Tenant 1 - Active
+```
+
+La API no escribió ningún `Where`.
+
+Las dos condiciones fueron agregadas automáticamente por EF Core.
+
+---
+
+## ¿Qué pasaba si necesitábamos incluir eliminados?
+
+Hasta EF Core 9, la herramienta disponible era:
+
+```csharp
+.IgnoreQueryFilters()
+```
+
+Por ejemplo:
+
+```csharp
+var orders = await _context.Orders
+    .IgnoreQueryFilters()
+    .OrderBy(order => order.Id)
+    .ToListAsync();
+```
+
+El problema es que `IgnoreQueryFilters()` no podía desactivar solamente una parte del filtro combinado.
+
+Desactivaba el filtro completo.
+
+El SQL generado quedaba así:
+
+```sql
+SELECT [o].[Id],
+       [o].[CreatedAt],
+       [o].[Description],
+       [o].[IsDeleted],
+       [o].[TenantId]
+FROM [Orders] AS [o]
+ORDER BY [o].[Id]
+```
+
+Desaparecieron ambas condiciones:
+
+```sql
+IsDeleted = 0
+TenantId = @CurrentTenantId
+```
+
+En nuestro laboratorio, eso devuelve:
+
+```text
+Order 1 - Tenant 1 - Active
+Order 2 - Tenant 1 - Deleted
+Order 3 - Tenant 2 - Active
+Order 4 - Tenant 2 - Deleted
+```
+
+Pero nosotros solamente queríamos ver los registros eliminados del tenant actual.
+
+No queríamos acceder a datos de otros tenants.
+
+---
+
+## El workaround antes de EF Core 10
+
+El problema podía resolverse manualmente:
+
+```csharp
+var orders = await _context.Orders
+    .IgnoreQueryFilters()
+    .Where(order => order.TenantId == _context.CurrentTenantId)
+    .OrderBy(order => order.Id)
+    .ToListAsync();
+```
+
+Ahora obtenemos:
+
+```text
+Order 1 - Tenant 1 - Active
+Order 2 - Tenant 1 - Deleted
+```
+
+Y EF genera:
+
+```sql
+SELECT [o].[Id],
+       [o].[CreatedAt],
+       [o].[Description],
+       [o].[IsDeleted],
+       [o].[TenantId]
+FROM [Orders] AS [o]
+WHERE [o].[TenantId] = @CurrentTenantId
+ORDER BY [o].[Id]
+```
+
+Funciona.
+
+Pero hay una diferencia importante:
+
+```csharp
+.Where(order => order.TenantId == _context.CurrentTenantId)
+```
+
+no fue agregado automáticamente por EF.
+
+Lo agregamos nosotros.
+
+Primero desactivamos todos los filtros globales y después reconstruimos manualmente la regla que queríamos conservar.
+
+Con sólo dos condiciones puede parecer un problema menor.
+
+Pero imaginemos una aplicación donde tenemos:
+
+```text
+Soft Delete
+Tenant
+Region
+Visibility
+Security Scope
+```
+
+y necesitamos ignorar solamente Soft Delete.
+
+Con el enfoque anterior tenemos que:
+
+1. Desactivar todos los filtros.
+2. Recordar cuáles deben continuar aplicándose.
+3. Reconstruirlos manualmente.
+
+Además de repetitivo, aumenta el riesgo de olvidar una restricción.
+
+---
+
+# EF Core 10: Named Query Filters
+
+EF Core 10 introduce **Named Query Filters**.
+
+Ahora podemos definir varios filtros independientes sobre la misma entidad:
+
+```csharp
+modelBuilder.Entity<Order>()
+    .HasQueryFilter(
+        QueryFilterNames.SoftDeletion,
+        order => !order.IsDeleted)
+    .HasQueryFilter(
+        QueryFilterNames.Tenant,
+        order => order.TenantId == CurrentTenantId);
+```
+
+En el ejemplo utilizamos constantes para evitar strings distribuidos por la aplicación:
+
+```csharp
+public static class QueryFilterNames
+{
+    public const string SoftDeletion = "SoftDeletionFilter";
+    public const string Tenant = "TenantFilter";
+}
+```
+
+Ahora tenemos dos reglas distintas:
+
+```text
+SoftDeletionFilter
+    ↓
+!order.IsDeleted
+
+TenantFilter
+    ↓
+order.TenantId == CurrentTenantId
+```
+
+La diferencia importante no es simplemente que cada filtro tenga un nombre.
+
+La diferencia es que EF Core puede administrarlos de manera independiente.
+
+---
+
+## Deshabilitar solamente Soft Delete
+
+Ahora podemos escribir:
+
+```csharp
+var orders = await _context.Orders
+    .IgnoreQueryFilters([QueryFilterNames.SoftDeletion])
+    .OrderBy(order => order.Id)
+    .ToListAsync();
+```
+
+Estamos diciendo explícitamente:
+
+```text
+Ignorar SoftDeletionFilter
+```
+
+No estamos desactivando:
+
+```text
+TenantFilter
+```
+
+Por eso EF Core mantiene automáticamente la restricción por tenant.
+
+El SQL generado es:
+
+```sql
+SELECT [o].[Id],
+       [o].[CreatedAt],
+       [o].[Description],
+       [o].[IsDeleted],
+       [o].[TenantId]
+FROM [Orders] AS [o]
+WHERE [o].[TenantId] = @CurrentTenantId
+ORDER BY [o].[Id]
+```
+
+El resultado vuelve a ser:
+
+```text
+Order 1 - Tenant 1 - Active
+Order 2 - Tenant 1 - Deleted
+```
+
+El resultado es el mismo que obteníamos con el workaround anterior.
+
+Pero la intención del código es completamente diferente.
+
+### Antes
+
+```csharp
+.IgnoreQueryFilters()
+.Where(order =>
+    order.TenantId == _context.CurrentTenantId)
+```
+
+Primero eliminamos todas las reglas y después reconstruimos manualmente la que queríamos conservar.
+
+### EF Core 10
+
+```csharp
+.IgnoreQueryFilters([QueryFilterNames.SoftDeletion])
+```
+
+Solamente desactivamos la regla que realmente queremos ignorar.
+
+El filtro de tenant nunca fue desactivado.
+
+Ese es el verdadero valor de Named Query Filters.
+
+---
+
+# También podemos hacer lo contrario
+
+Supongamos ahora que necesitamos una consulta administrativa que muestre los pedidos activos de todos los tenants.
+
+Queremos desactivar:
+
+```text
+TenantFilter
+```
+
+pero mantener:
+
+```text
+SoftDeletionFilter
+```
+
+Con EF Core 10:
+
+```csharp
+var orders = await _context.Orders
+    .IgnoreQueryFilters([QueryFilterNames.Tenant])
+    .OrderBy(order => order.Id)
+    .ToListAsync();
+```
+
+EF genera:
+
+```sql
+SELECT [o].[Id],
+       [o].[CreatedAt],
+       [o].[Description],
+       [o].[IsDeleted],
+       [o].[TenantId]
+FROM [Orders] AS [o]
+WHERE [o].[IsDeleted] = CAST(0 AS bit)
+ORDER BY [o].[Id]
+```
+
+El tenant desapareció de la consulta.
+
+Soft Delete continúa activo.
+
+El resultado:
+
+```text
+Order 1 - Tenant 1 - Active
+Order 3 - Tenant 2 - Active
+```
+
+Esto deja muy clara la diferencia respecto de los filtros anteriores.
+
+Cada regla puede participar o no de la consulta de manera independiente.
+
+---
+
+# Comparación completa
+
+En el laboratorio utilizamos cuatro pedidos:
+
+```text
+Order 1
+Tenant: 1
+Deleted: false
+
+Order 2
+Tenant: 1
+Deleted: true
+
+Order 3
+Tenant: 2
+Deleted: false
+
+Order 4
+Tenant: 2
+Deleted: true
+```
+
+Y `CurrentTenantId = 1`.
+
+El comportamiento queda así:
+
+| Consulta | Soft Delete | Tenant | Resultado |
+|---|---|---|---|
+| Consulta normal | Activo | Activo | Order 1 |
+| `IgnoreQueryFilters()` | Desactivado | Desactivado | Orders 1, 2, 3, 4 |
+| Workaround anterior | Desactivado | Reconstruido manualmente | Orders 1, 2 |
+| Ignorar `SoftDeletionFilter` | Desactivado | Activo | Orders 1, 2 |
+| Ignorar `TenantFilter` | Activo | Desactivado | Orders 1, 3 |
+
+La diferencia entre las dos consultas que devuelven `Order 1` y `Order 2` es especialmente importante.
+
+### Workaround anterior
+
+```csharp
+var orders = await _context.Orders
+    .IgnoreQueryFilters()
+    .Where(order =>
+        order.TenantId == _context.CurrentTenantId)
+    .ToListAsync();
+```
+
+### EF Core 10
+
+```csharp
+var orders = await _context.Orders
+    .IgnoreQueryFilters([QueryFilterNames.SoftDeletion])
+    .ToListAsync();
+```
+
+Ambas pueden generar SQL equivalente:
+
+```sql
+WHERE [o].[TenantId] = @CurrentTenantId
+```
+
+Pero sólo en la segunda esa condición sigue existiendo porque forma parte del modelo y EF Core la mantuvo automáticamente.
+
+---
+
+# ¿Cuándo usar Named Query Filters?
+
+Esta característica resulta especialmente útil cuando una entidad tiene varias reglas transversales independientes.
+
+Por ejemplo:
+
+```text
+Soft Delete
++
+Multi-Tenancy
+```
+
+También:
+
+```text
+Soft Delete
++
+Tenant
++
+IsActive
+```
+
+o:
+
+```text
+Tenant
++
+Archived
++
+Visibility
+```
+
+Otro caso habitual podría ser una aplicación donde normalmente sólo queremos consultar registros vigentes:
+
+```text
+IsArchived = false
+```
+
+pero determinados reportes necesitan incluir registros archivados sin dejar de respetar el tenant u organización actual.
+
+El patrón suele ser siempre el mismo:
+
+```text
+Tengo varias reglas globales.
+
+En determinadas consultas necesito desactivar solamente una.
+```
+
+Ahí Named Query Filters encaja muy bien.
+
+---
+
+# ¿Cuándo no aporta demasiado?
+
+Si una entidad solamente tiene:
+
+```csharp
+.HasQueryFilter(x => !x.IsDeleted)
+```
+
+y nunca necesitamos combinar ese filtro con otras reglas, probablemente no exista una necesidad real de convertirlo inmediatamente en un filtro con nombre.
+
+Los Global Query Filters tradicionales siguen siendo perfectamente válidos.
+
+Tampoco utilizaría Query Filters para transformar cualquier condición de negocio en una regla global.
+
+Por ejemplo:
+
+```text
+Orders.CreatedAt > DateTime.UtcNow.AddDays(-30)
+```
+
+probablemente corresponda a una consulta específica y no a una condición que deba modificar automáticamente todas las consultas sobre `Order`.
+
+Los Query Filters funcionan mejor cuando representan reglas realmente transversales del modelo.
+
+---
+
+# Named Query Filters no reemplaza la seguridad
+
+Hay una distinción importante.
+
+Que tengamos:
+
+```text
+TenantFilter
+```
+
+no significa que EF Core se haya convertido en nuestro sistema de autorización.
+
+Un desarrollador todavía puede escribir:
+
+```csharp
+.IgnoreQueryFilters()
+```
+
+y desactivar todos los filtros.
+
+Named Query Filters reduce la necesidad de hacerlo cuando solamente queremos ignorar una condición, pero no convierte los filtros del ORM en una frontera de seguridad imposible de evitar.
+
+En sistemas donde el aislamiento entre tenants sea crítico, estos filtros deberían formar parte de una estrategia más amplia:
+
+```text
+Autorización
++
+Validaciones
++
+Tests
++
+Aislamiento de datos
+```
+
+Y, dependiendo del escenario, incluso podrían complementarse con mecanismos de base de datos como Row-Level Security.
+
+---
+
+# Ojo con las navegaciones requeridas
+
+Los Global Query Filters tienen además una consideración importante cuando intervienen relaciones.
+
+Si una entidad relacionada mediante una navegación requerida queda excluida por un filtro, EF Core puede generar un `INNER JOIN`.
+
+Eso puede provocar que la entidad principal tampoco aparezca en el resultado.
+
+Por eso no alcanza con comprobar que un filtro funciona consultando directamente:
+
+```csharp
+context.Orders
+```
+
+En modelos más complejos también conviene probar las consultas que incluyen relaciones afectadas por filtros globales.
+
+---
+
+# El SQL importa
+
+Una de las cosas que me interesa mostrar en esta serie es que no alcanza con mirar solamente el LINQ.
+
+También debemos observar qué termina ejecutando la base de datos.
+
+En este ejemplo vimos claramente la evolución.
+
+### Consulta normal
+
+```sql
+WHERE [o].[IsDeleted] = CAST(0 AS bit)
+  AND [o].[TenantId] = @CurrentTenantId
+```
+
+### IgnoreQueryFilters()
+
+```sql
+-- Sin condiciones globales
+```
+
+### Workaround anterior
+
+```sql
+WHERE [o].[TenantId] = @CurrentTenantId
+```
+
+### EF Core 10 ignorando Soft Delete
+
+```sql
+WHERE [o].[TenantId] = @CurrentTenantId
+```
+
+### EF Core 10 ignorando Tenant
+
+```sql
+WHERE [o].[IsDeleted] = CAST(0 AS bit)
+```
+
+La diferencia entre el workaround anterior y EF Core 10 no está necesariamente en el SQL resultante.
+
+Está en **cómo llegamos a ese SQL y qué reglas siguen perteneciendo al modelo**.
+
+Ese detalle es fundamental.
+
+---
+
+# El ejemplo completo
+
+El código que acompaña este artículo se encuentra dentro del repositorio de laboratorios de EF Core 10:
+
+```text
+EfCore10Labs
+└── 01-NamedQueryFilters
+    ├── NamedQueryFilters.slnx
+    └── NamedQueryFilters.Api
+```
+
+El laboratorio utiliza:
+
+```text
+.NET 10
+Entity Framework Core 10
+ASP.NET Core Web API
+SQL Server
+```
+
+No requiere ninguna característica específica de SQL Server 2025.
+
+El tenant actual se mantiene deliberadamente fijo en:
+
+```csharp
+public int CurrentTenantId { get; } = 1;
+```
+
+En una aplicación real, normalmente provendría del contexto de autenticación, un claim, un header, un subdominio u otro mecanismo.
+
+El valor fijo permite aislar el comportamiento que queremos estudiar: los Query Filters.
+
+---
+
+# Conclusión
+
+Named Query Filters puede parecer inicialmente una mejora pequeña de EF Core 10.
+
+Después de todo, visualmente el cambio parece limitarse a esto:
+
+```csharp
+.HasQueryFilter("SoftDeletionFilter", ...)
+.HasQueryFilter("TenantFilter", ...)
+```
+
+Pero el cambio importante no está en poder ponerle un nombre a un filtro.
+
+Está en poder administrar cada regla de manera independiente.
+
+En escenarios donde conviven Soft Delete, Multi-Tenancy, archivado, visibilidad u otras restricciones transversales, ya no tenemos que elegir entre mantener todos los filtros activos o ejecutar:
+
+```csharp
+IgnoreQueryFilters()
+```
+
+y eliminarlos todos.
+
+Ahora podemos expresar exactamente qué regla queremos ignorar.
+
+Y eso hace que el código sea más explícito, reduce la duplicación y disminuye el riesgo de reconstruir manualmente reglas que deberían seguir formando parte del modelo.
