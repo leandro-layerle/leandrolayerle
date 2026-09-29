@@ -1,0 +1,345 @@
+.wrapper {
+  overflow: hidden;
+
+  border: 1px solid #ded9d0;
+
+  border-radius: 24px;
+
+  background: rgba(255, 255, 255, 0.88);
+
+  box-shadow:
+    0 25px 70px rgba(16, 24, 32, 0.08),
+    inset 0 1px rgba(255, 255, 255, 0.9);
+}
+
+.formHeader {
+  display: grid;
+
+  grid-template-columns: 42px 1fr;
+
+  gap: 18px;
+
+  padding: 30px 34px;
+
+  border-bottom: 1px solid #e4dfd6;
+
+  background: #fbfaf7;
+}
+
+.formNumber {
+  padding-top: 5px;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.15em;
+
+  color: #97948e;
+}
+
+.kicker {
+  margin: 0 0 6px;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+
+  color: #326bd4;
+}
+
+.formHeader h2 {
+  margin: 0;
+
+  font-size: 27px;
+  line-height: 1.1;
+
+  font-weight: 680;
+
+  letter-spacing: -0.04em;
+
+  color: #101820;
+}
+
+/* ============================================================
+   FORM
+============================================================ */
+
+.form {
+  position: relative;
+
+  padding: 34px;
+}
+
+.row {
+  display: grid;
+
+  grid-template-columns: repeat(2, 1fr);
+
+  gap: 18px;
+}
+
+.field {
+  margin-bottom: 22px;
+}
+
+.field label,
+.serviceFieldset legend {
+  display: block;
+
+  margin-bottom: 9px;
+
+  font-size: 12px;
+  font-weight: 650;
+
+  color: #30383e;
+}
+
+.field label span {
+  color: #236cef;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+
+  border: 1px solid #d8d4cc;
+
+  border-radius: 10px;
+
+  outline: none;
+
+  background: #fff;
+
+  font-family: inherit;
+  font-size: 14px;
+
+  color: #101820;
+
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.field input {
+  height: 50px;
+
+  padding: 0 15px;
+}
+
+.field textarea {
+  resize: vertical;
+
+  min-height: 145px;
+
+  padding: 14px 15px;
+
+  line-height: 1.55;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: #a19f99;
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: #3277eb;
+
+  box-shadow: 0 0 0 3px rgba(50, 119, 235, 0.09);
+}
+
+/* ============================================================
+   SERVICIOS
+============================================================ */
+
+.serviceFieldset {
+  margin: 0 0 25px;
+
+  padding: 0;
+
+  border: 0;
+}
+
+.serviceOptions {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 8px;
+}
+
+.serviceOption {
+  position: relative;
+
+  cursor: pointer;
+}
+
+.serviceOption input {
+  position: absolute;
+
+  opacity: 0;
+
+  pointer-events: none;
+}
+
+.serviceOption span {
+  display: inline-flex;
+
+  align-items: center;
+
+  min-height: 38px;
+
+  padding: 0 13px;
+
+  border: 1px solid #d8d4cc;
+
+  border-radius: 999px;
+
+  background: #fff;
+
+  font-size: 12px;
+  font-weight: 550;
+
+  color: #596066;
+
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.serviceOption input:checked + span {
+  border-color: #276fee;
+
+  background: #edf4ff;
+
+  color: #185ecf;
+}
+
+/* ============================================================
+   BUTTON
+============================================================ */
+
+.submit {
+  width: 100%;
+
+  min-height: 56px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  padding: 0 20px;
+
+  border: 0;
+
+  border-radius: 11px;
+
+  background: #101820;
+
+  cursor: pointer;
+
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 650;
+
+  color: white;
+
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.submit:hover:not(:disabled) {
+  background: #1d2934;
+
+  transform: translateY(-1px);
+}
+
+.submit:disabled {
+  opacity: 0.7;
+
+  cursor: wait;
+}
+
+.submit span:last-child {
+  font-size: 20px;
+}
+
+/* ============================================================
+   ESTADOS
+============================================================ */
+
+.success {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 4px;
+
+  margin-top: 16px;
+
+  padding: 14px 16px;
+
+  border: 1px solid #c9e7d9;
+
+  border-radius: 10px;
+
+  background: #f0faf5;
+
+  font-size: 13px;
+
+  color: #28714f;
+}
+
+.error {
+  margin-top: 16px;
+
+  padding: 14px 16px;
+
+  border: 1px solid #efcccc;
+
+  border-radius: 10px;
+
+  background: #fff5f5;
+
+  font-size: 13px;
+
+  color: #9a3535;
+}
+
+/* ============================================================
+   SPAM
+============================================================ */
+
+.honeypot {
+  position: absolute;
+
+  left: -9999px;
+
+  width: 1px;
+  height: 1px;
+
+  overflow: hidden;
+}
+
+/* ============================================================
+   RESPONSIVE
+============================================================ */
+
+@media (max-width: 600px) {
+  .formHeader,
+  .form {
+    padding: 25px 22px;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+
+    gap: 0;
+  }
+}

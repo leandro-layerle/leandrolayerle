@@ -1,0 +1,275 @@
+.footer {
+  padding: 78px 0 28px;
+
+  background:
+    radial-gradient(
+      circle at 85% 0%,
+      rgba(40, 105, 220, 0.16),
+      transparent 30%
+    ),
+    #07131f;
+
+  color: #ffffff;
+}
+
+.container {
+  width: min(1400px, calc(100% - 80px));
+
+  margin: 0 auto;
+}
+
+/* ============================================================
+   TOP
+============================================================ */
+
+.top {
+  display: grid;
+
+  grid-template-columns:
+    minmax(300px, 0.8fr)
+    minmax(0, 1.3fr);
+
+  gap: 110px;
+}
+
+/* ============================================================
+   BRAND
+============================================================ */
+
+.brand {
+  max-width: 430px;
+}
+
+.name {
+  display: inline-block;
+
+  font-size: 20px;
+
+  font-weight: 500;
+
+  letter-spacing: 0.17em;
+
+  color: #ffffff;
+
+  text-decoration: none;
+}
+
+.role {
+  margin: 9px 0 0;
+
+  font-size: 9px;
+  font-weight: 500;
+
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+
+  color: #7695b5;
+}
+
+.description {
+  max-width: 390px;
+
+  margin: 27px 0 0;
+
+  font-size: 15px;
+  line-height: 1.7;
+
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.contactButton {
+  min-width: 150px;
+  min-height: 46px;
+
+  margin-top: 27px;
+
+  padding: 0 18px;
+
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 30px;
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+
+  border-radius: 9px;
+
+  background: #1469e8;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  color: #ffffff;
+
+  text-decoration: none;
+
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.contactButton:hover {
+  background: #0b5ccc;
+
+  transform: translateY(-1px);
+}
+
+.contactButton span {
+  font-size: 18px;
+}
+
+/* ============================================================
+   LINKS
+============================================================ */
+
+.links {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 50px;
+}
+
+.column {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: flex-start;
+
+  gap: 12px;
+}
+
+.columnTitle {
+  margin: 0 0 9px;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+
+  color: #6c8bac;
+}
+
+.column a {
+  font-size: 13px;
+  line-height: 1.45;
+
+  color: rgba(255, 255, 255, 0.65);
+
+  text-decoration: none;
+
+  transition:
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.column a:hover {
+  color: #ffffff;
+
+  transform: translateX(2px);
+}
+
+/* ============================================================
+   DIVIDER
+============================================================ */
+
+.divider {
+  height: 1px;
+
+  margin: 60px 0 25px;
+
+  background:
+    rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================
+   BOTTOM
+============================================================ */
+
+.bottom {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 30px;
+
+  font-size: 10px;
+
+  letter-spacing: 0.08em;
+
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.bottom p {
+  margin: 0;
+}
+
+.bottom a {
+  color: rgba(255, 255, 255, 0.5);
+
+  text-decoration: none;
+}
+
+.bottom a:hover {
+  color: #ffffff;
+}
+
+/* ============================================================
+   TABLET
+============================================================ */
+
+@media (max-width: 1000px) {
+  .container {
+    width: calc(100% - 48px);
+  }
+
+  .top {
+    grid-template-columns: 1fr;
+
+    gap: 55px;
+  }
+
+  .brand {
+    max-width: 600px;
+  }
+}
+
+/* ============================================================
+   MOBILE
+============================================================ */
+
+@media (max-width: 650px) {
+  .footer {
+    padding-top: 60px;
+  }
+
+  .container {
+    width: calc(100% - 36px);
+  }
+
+  .links {
+    grid-template-columns: 1fr 1fr;
+
+    gap: 40px 25px;
+  }
+
+  .bottom {
+    align-items: flex-start;
+
+    flex-direction: column;
+
+    gap: 10px;
+  }
+}
+
+@media (max-width: 450px) {
+  .links {
+    grid-template-columns: 1fr;
+  }
+}

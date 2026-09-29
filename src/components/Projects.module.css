@@ -1,0 +1,323 @@
+.section {
+  padding: 110px 0 120px;
+
+  background: #f7f4ee;
+
+  color: #101820;
+}
+
+.container {
+  width: min(1400px, calc(100% - 80px));
+
+  margin: 0 auto;
+}
+
+/* ============================================================
+   CABECERA
+============================================================ */
+
+.header {
+  margin-bottom: 55px;
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+
+  color: #73787d;
+}
+
+.headerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.7fr);
+  gap: 70px;
+  align-items: end;
+}
+
+.title {
+  max-width: 760px;
+
+  margin: 0;
+
+  font-size: clamp(42px, 4vw, 62px);
+  line-height: 0.98;
+  font-weight: 720;
+  letter-spacing: -0.055em;
+
+  color: #101820;
+}
+
+.title span {
+  color: #80858a;
+}
+
+.intro {
+  max-width: 420px;
+
+  margin: 0 0 6px;
+
+  font-size: 16px;
+  line-height: 1.7;
+
+  color: #656c72;
+}
+
+/* ============================================================
+   LISTA
+============================================================ */
+
+.list {
+  border-top: 1px solid #ddd8cf;
+}
+
+/* ============================================================
+   PROYECTO
+============================================================ */
+
+.project {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.72fr);
+  gap: 52px;
+  align-items: center;
+
+  padding: 42px 0 52px;
+
+  border-bottom: 1px solid #ddd8cf;
+}
+
+.reverse {
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.08fr);
+}
+
+.reverse .imageColumn {
+  order: 2;
+}
+
+.reverse .contentColumn {
+  order: 1;
+}
+
+/* ============================================================
+   IMAGEN
+============================================================ */
+
+.imageColumn {
+  min-width: 0;
+}
+
+.imageFrame {
+  overflow: hidden;
+
+  border: 1px solid rgba(16, 24, 32, 0.08);
+  border-radius: 20px;
+
+  background: #ece8df;
+
+  box-shadow: 0 18px 45px rgba(16, 24, 32, 0.07);
+}
+
+.image {
+  display: block;
+
+  width: 100%;
+  height: auto;
+
+  object-fit: cover;
+}
+
+/* ============================================================
+   CONTENIDO
+============================================================ */
+
+.contentColumn {
+  max-width: 440px;
+}
+
+.number {
+  display: inline-block;
+
+  margin-bottom: 16px;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.16em;
+
+  color: #9a978f;
+}
+
+.type {
+  margin: 0 0 10px;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+
+  color: #2f63b9;
+}
+
+.projectName {
+  margin: 0;
+
+  font-size: clamp(34px, 3vw, 48px);
+  line-height: 1;
+  font-weight: 680;
+  letter-spacing: -0.05em;
+
+  color: #101820;
+}
+
+.description {
+  margin: 18px 0 0;
+
+  font-size: 16px;
+  line-height: 1.7;
+
+  color: #60676d;
+}
+
+/* ============================================================
+   TAGS
+============================================================ */
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  margin-top: 22px;
+}
+
+.tags span {
+  padding: 7px 10px;
+
+  border: 1px solid #ddd8cf;
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.55);
+
+  font-size: 10px;
+  font-weight: 600;
+
+  color: #61686e;
+}
+
+/* ============================================================
+   LINK
+============================================================ */
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+
+  margin-top: 28px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  color: #101820;
+}
+
+.link span {
+  font-size: 22px;
+  color: #1554b5;
+
+  transition: transform 180ms ease;
+}
+
+.link:hover span {
+  transform: translateX(5px);
+}
+
+/* ============================================================
+   TABLET
+============================================================ */
+
+@media (max-width: 1000px) {
+  .section {
+    padding: 90px 0 100px;
+  }
+
+  .container {
+    width: calc(100% - 48px);
+  }
+
+  .headerGrid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .intro {
+    max-width: 580px;
+  }
+
+  .project,
+  .reverse {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .reverse .imageColumn,
+  .reverse .contentColumn {
+    order: initial;
+  }
+
+  .contentColumn {
+    max-width: 100%;
+  }
+}
+
+/* ============================================================
+   MOBILE
+============================================================ */
+
+@media (max-width: 650px) {
+  .section {
+    padding: 70px 0 80px;
+  }
+
+  .container {
+    width: calc(100% - 40px);
+  }
+
+  .header {
+    margin-bottom: 40px;
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .project {
+    gap: 22px;
+    padding: 30px 0 38px;
+  }
+
+  .imageFrame {
+    border-radius: 16px;
+  }
+
+  .projectName {
+    font-size: 34px;
+  }
+
+  .description {
+    font-size: 15px;
+  }
+
+  .tags {
+    margin-top: 18px;
+  }
+
+  .link {
+    margin-top: 24px;
+  }
+}

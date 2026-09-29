@@ -1,0 +1,171 @@
+.page {
+  min-height: calc(100vh - 88px);
+
+  padding: 75px 0 90px;
+
+  background:
+    radial-gradient(
+      circle at 15% 20%,
+      rgba(45, 105, 225, 0.07),
+      transparent 30%
+    ),
+    #f7f4ee;
+}
+
+.container {
+  width: min(1320px, calc(100% - 80px));
+
+  margin: 0 auto;
+
+  display: grid;
+
+  grid-template-columns: minmax(0, 0.8fr) minmax(500px, 1fr);
+
+  gap: 100px;
+
+  align-items: start;
+}
+
+/* ============================================================
+   INTRO
+============================================================ */
+
+.intro {
+  min-height: 650px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: space-between;
+
+  padding: 25px 0;
+}
+
+.eyebrow {
+  margin: 0 0 22px;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.27em;
+  text-transform: uppercase;
+
+  color: #70767b;
+}
+
+.title {
+  max-width: 590px;
+
+  margin: 0;
+
+  font-size: clamp(48px, 4.8vw, 70px);
+  line-height: 0.96;
+
+  font-weight: 720;
+
+  letter-spacing: -0.06em;
+
+  color: #101820;
+}
+
+.title span {
+  color: #2868e8;
+}
+
+.description {
+  max-width: 560px;
+
+  margin: 28px 0 0;
+
+  font-size: 17px;
+  line-height: 1.7;
+
+  color: #5f676d;
+}
+
+/* ============================================================
+   PRINCIPIOS
+============================================================ */
+
+.introBottom {
+  max-width: 550px;
+
+  border-top: 1px solid #d9d4cb;
+}
+
+.principle {
+  display: grid;
+
+  grid-template-columns: 42px 1fr;
+
+  gap: 18px;
+
+  padding: 22px 0;
+
+  border-bottom: 1px solid #d9d4cb;
+}
+
+.principle > span {
+  padding-top: 3px;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.14em;
+
+  color: #9b9891;
+}
+
+.principle strong {
+  font-size: 14px;
+
+  color: #111820;
+}
+
+.principle p {
+  margin: 6px 0 0;
+
+  font-size: 13px;
+  line-height: 1.55;
+
+  color: #74797d;
+}
+
+/* ============================================================
+   RESPONSIVE
+============================================================ */
+
+@media (max-width: 1000px) {
+  .container {
+    width: calc(100% - 48px);
+
+    grid-template-columns: 1fr;
+
+    gap: 55px;
+  }
+
+  .intro {
+    min-height: auto;
+
+    gap: 55px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 55px 0 70px;
+  }
+
+  .container {
+    width: calc(100% - 40px);
+  }
+
+  .title {
+    font-size: 44px;
+  }
+
+  .description {
+    font-size: 16px;
+  }
+}
