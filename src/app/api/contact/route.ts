@@ -250,7 +250,7 @@ export async function POST(request: Request) {
       process.env.RESEND_API_KEY;
 
     const fromEmail =
-      process.env.RESEND_FROM_EMAIL;
+      process.env.CONTACT_FROM_EMAIL;
 
     const toEmail =
       process.env.CONTACT_TO_EMAIL;
