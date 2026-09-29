@@ -1,0 +1,939 @@
+export const article = {
+  title: "EF Core 10: Complex Types en columnas JSON con ToJson()",
+
+  slug: "ef-core-10-json-columns",
+
+  excerpt:
+    "Cómo mapear Complex Types y colecciones complejas a columnas JSON en EF Core 10, consultarlas con LINQ y entender qué cambia en SQL Server.",
+
+  category: "EF Core",
+
+  tags: [
+    ".NET 10",
+    "EF Core 10",
+    "C#",
+    "SQL Server",
+    "JSON",
+    "Complex Types",
+  ],
+
+  date: "2026-09-29",
+
+  readingTime: "18 min",
+
+  image: "/images/articles/ef-core-10-columns-tojson.png",
+
+  repository:
+    "https://github.com/leandro-layerle/EfCore10Labs/tree/main/03-JsonColumns",
+
+  published: true,
+
+  series: "EF Core 10 New Features",
+  seriesOrder: 3,
+};
+
+En el artículo anterior vimos que un Complex Type como `Address` podía formar parte de un `Customer` sin tener identidad propia.
+
+El modelo era simple:
+
+```text
+Customer
+├── Id
+├── Name
+├── ShippingAddress
+└── BillingAddress
+```
+
+y `Address` tenía:
+
+```text
+Street
+City
+PostalCode
+Country
+```
+
+Cuando configurábamos:
+
+```csharp
+customer.ComplexProperty(
+    x => x.ShippingAddress);
+```
+
+Entity Framework Core distribuía las propiedades internas en varias columnas de la tabla:
+
+```text
+ShippingAddress_Street
+ShippingAddress_City
+ShippingAddress_PostalCode
+ShippingAddress_Country
+```
+
+En EF Core 10 tenemos otra posibilidad.
+
+Podemos decir que todo el Complex Type se almacene como **un único documento JSON**:
+
+```csharp
+customer.ComplexProperty(
+    x => x.ShippingAddress,
+    address => address.ToJson());
+```
+
+Parece un cambio pequeño.
+
+Pero modifica de forma importante cómo representamos ese objeto en la base de datos.
+
+---
+
+## Qué es realmente nuevo en EF Core 10
+
+Conviene hacer una distinción.
+
+Las columnas JSON no aparecieron por primera vez en EF Core 10.
+
+Entity Framework Core ya tenía soporte para mapear datos a JSON en versiones anteriores.
+
+Lo nuevo que nos interesa en este artículo es:
+
+```text
+EF Core 10
+→ Complex Types
+→ ToJson()
+```
+
+Es decir, ahora podemos combinar la semántica de los Complex Types —objetos sin identidad propia— con almacenamiento documental dentro de una base relacional.
+
+EF Core 10 también incorpora colecciones de Complex Types.
+
+En proveedores relacionales, esas colecciones deben mapearse a JSON.
+
+Vamos a probar ambas cosas.
+
+---
+
+## Nuestro modelo
+
+Continuamos con el mismo modelo del laboratorio anterior.
+
+```csharp
+public sealed class Customer
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+
+    public required Address ShippingAddress { get; set; }
+
+    public Address? BillingAddress { get; set; }
+}
+```
+
+`Address` sigue sin identidad propia:
+
+```csharp
+public sealed class Address
+{
+    public required string Street { get; set; }
+
+    public required string City { get; set; }
+
+    public required string PostalCode { get; set; }
+
+    public required string Country { get; set; }
+}
+```
+
+La diferencia no está en las clases.
+
+Está en el mapping.
+
+---
+
+## Table splitting vs JSON
+
+En el artículo anterior configurábamos:
+
+```csharp
+customer.ComplexProperty(
+    x => x.ShippingAddress);
+
+customer.ComplexProperty(
+    x => x.BillingAddress);
+```
+
+Eso genera columnas independientes.
+
+Ahora hacemos:
+
+```csharp
+customer.ComplexProperty(
+    x => x.ShippingAddress,
+    address => address.ToJson());
+
+customer.ComplexProperty(
+    x => x.BillingAddress,
+    address => address.ToJson());
+```
+
+La diferencia conceptual es:
+
+```text
+TABLE SPLITTING
+
+ShippingAddress
+    ├── Street       → columna
+    ├── City         → columna
+    ├── PostalCode   → columna
+    └── Country      → columna
+```
+
+frente a:
+
+```text
+JSON
+
+ShippingAddress
+    ↓
+una única columna
+    ↓
+{
+  "Street": "...",
+  "City": "...",
+  "PostalCode": "...",
+  "Country": "..."
+}
+```
+
+Nuestro código C# prácticamente no cambió.
+
+El modelo de almacenamiento sí.
+
+---
+
+## La configuración completa
+
+En el `DbContext`:
+
+```csharp
+modelBuilder.Entity<Customer>(
+    customer =>
+    {
+        customer.HasKey(x => x.Id);
+
+        customer.Property(x => x.Name)
+            .IsRequired();
+
+        customer.ComplexProperty(
+            x => x.ShippingAddress,
+            address => address.ToJson());
+
+        customer.ComplexProperty(
+            x => x.BillingAddress,
+            address => address.ToJson());
+    });
+```
+
+La llamada importante es:
+
+```csharp
+ToJson()
+```
+
+Eso indica que el Complex Type completo debe persistirse en una única columna JSON.
+
+---
+
+## ¿La columna es json o nvarchar(max)?
+
+Depende de SQL Server y de la configuración del provider.
+
+En un SQL Server local utilizando:
+
+```csharp
+options.UseSqlServer(connectionString)
+```
+
+EF Core utiliza actualmente un nivel de compatibilidad conservador por defecto.
+
+En ese escenario, el JSON se almacena normalmente como:
+
+```text
+nvarchar(max)
+```
+
+La tabla será conceptualmente:
+
+```text
+Customers
+├── Id                 int
+├── Name               nvarchar(max)
+├── ShippingAddress    nvarchar(max)
+└── BillingAddress     nvarchar(max) NULL
+```
+
+Esto no significa que EF trate la propiedad como un string común.
+
+El mapping sigue siendo JSON y EF sabe navegar el documento.
+
+En SQL Server 2025, cuando utilizamos nivel de compatibilidad 170 o superior, y también en escenarios compatibles de Azure SQL, EF Core 10 puede utilizar el tipo nativo:
+
+```text
+json
+```
+
+La estructura sería:
+
+```sql
+CREATE TABLE [Customers] (
+    [Id] int NOT NULL IDENTITY,
+    [Name] nvarchar(max) NOT NULL,
+    [ShippingAddress] json NOT NULL,
+    [BillingAddress] json NULL,
+    CONSTRAINT [PK_Customers] PRIMARY KEY ([Id])
+);
+```
+
+Por eso conviene revisar siempre la migración generada.
+
+No deberíamos asumir el tipo físico únicamente mirando nuestro modelo C#.
+
+---
+
+## Una dirección real almacenada como JSON
+
+Creamos:
+
+```csharp
+var customer =
+    new Customer
+    {
+        Name = "Acme Argentina",
+
+        ShippingAddress = new Address
+        {
+            Street = "Av. Corrientes 1234",
+            City = "Buenos Aires",
+            PostalCode = "C1043",
+            Country = "Argentina"
+        },
+
+        BillingAddress = new Address
+        {
+            Street = "Av. Santa Fe 2500",
+            City = "Buenos Aires",
+            PostalCode = "C1123",
+            Country = "Argentina"
+        }
+    };
+```
+
+En la tabla, `ShippingAddress` contiene un documento equivalente a:
+
+```json
+{
+  "City": "Buenos Aires",
+  "Country": "Argentina",
+  "PostalCode": "C1043",
+  "Street": "Av. Corrientes 1234"
+}
+```
+
+No tenemos cuatro columnas.
+
+Tenemos una.
+
+---
+
+## La propiedad opcional sigue siendo opcional
+
+También creamos:
+
+```csharp
+var customer =
+    new Customer
+    {
+        Name = "Contoso Argentina",
+
+        ShippingAddress = new Address
+        {
+            Street = "San Martín 500",
+            City = "Córdoba",
+            PostalCode = "X5000",
+            Country = "Argentina"
+        },
+
+        BillingAddress = null
+    };
+```
+
+Ahora la ausencia completa de `BillingAddress` se representa directamente como:
+
+```text
+BillingAddress = NULL
+```
+
+Esto es interesante si lo comparamos con table splitting.
+
+En el modelo anterior la ausencia del Complex Type estaba representada mediante varias columnas internas en `NULL`.
+
+Con JSON tenemos una única columna nullable.
+
+---
+
+## Consultar una propiedad dentro del JSON
+
+El hecho de almacenar `Address` como JSON no nos obliga a escribir SQL manual ni a deserializar el documento nosotros.
+
+Podemos seguir escribiendo LINQ:
+
+```csharp
+var query =
+    _context.Customers
+        .AsNoTracking()
+        .Where(customer =>
+            customer.ShippingAddress.City == city)
+        .OrderBy(customer => customer.Id);
+```
+
+Nuestro código sigue navegando:
+
+```text
+Customer
+→ ShippingAddress
+→ City
+```
+
+Pero EF sabe que `ShippingAddress` está almacenado como JSON.
+
+En SQL Server con JSON almacenado en una columna de texto, la traducción utiliza `JSON_VALUE` y es equivalente a:
+
+```sql
+WHERE CAST(
+    JSON_VALUE(
+        [c].[ShippingAddress],
+        '$.City'
+    ) AS nvarchar(max)
+) = @city
+```
+
+En SQL Server 2025 con el tipo nativo `json`, EF Core puede utilizar la variante tipada de `JSON_VALUE` mediante `RETURNING`.
+
+La expresión LINQ no cambia.
+
+Lo que cambia es la estrategia SQL utilizada por el provider.
+
+---
+
+## Proyectar sin traer el objeto completo
+
+También podemos escribir:
+
+```csharp
+var query =
+    _context.Customers
+        .AsNoTracking()
+        .OrderBy(customer => customer.Id)
+        .Select(customer => new
+        {
+            customer.Name,
+            City =
+                customer.ShippingAddress.City
+        });
+```
+
+EF puede proyectar directamente el valor interno del documento.
+
+Nuestro código no necesita:
+
+```text
+1. leer el JSON como string;
+2. deserializarlo;
+3. buscar City manualmente.
+```
+
+Seguimos trabajando con el modelo fuertemente tipado.
+
+---
+
+## Consultar si la columna JSON opcional es null
+
+El LINQ es:
+
+```csharp
+.Where(customer =>
+    customer.BillingAddress == null)
+```
+
+Con table splitting, EF necesitaba determinar la ausencia del Complex Type a partir de sus columnas internas.
+
+Ahora el concepto es más directo:
+
+```text
+BillingAddress
+→ una columna
+→ NULL
+```
+
+El SQL puede expresarse como:
+
+```sql
+WHERE [c].[BillingAddress] IS NULL
+```
+
+El modelo C# sigue diciendo exactamente lo mismo:
+
+```csharp
+Address?
+```
+
+pero el almacenamiento es diferente.
+
+---
+
+## EF sigue materializando objetos, no strings
+
+Cuando hacemos:
+
+```csharp
+var customers =
+    await _context.Customers
+        .AsNoTracking()
+        .ToListAsync();
+```
+
+recibimos:
+
+```csharp
+Customer
+```
+
+con:
+
+```csharp
+customer.ShippingAddress.City
+```
+
+No recibimos:
+
+```csharp
+string ShippingAddressJson
+```
+
+No necesitamos llamar manualmente a:
+
+```csharp
+JsonSerializer.Deserialize<Address>(...)
+```
+
+Ese detalle es importante.
+
+Una columna JSON no implica abandonar el modelo de dominio y convertir todo en strings.
+
+EF sigue entendiendo la estructura interna.
+
+---
+
+## Complex Collections en EF Core 10
+
+EF Core 10 también agrega soporte para colecciones de Complex Types.
+
+Supongamos un distribuidor con varios centros de despacho:
+
+```csharp
+public sealed class Distributor
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+
+    public List<Address> ShippingCenters { get; set; } = [];
+}
+```
+
+Nuevamente:
+
+```text
+Address
+```
+
+no tiene identidad propia.
+
+La diferencia es que ahora tenemos:
+
+```text
+List<Address>
+```
+
+En un proveedor relacional, una colección de Complex Types debe mapearse a JSON.
+
+La configuración es:
+
+```csharp
+modelBuilder.Entity<Distributor>(
+    distributor =>
+    {
+        distributor.HasKey(x => x.Id);
+
+        distributor.Property(x => x.Name)
+            .IsRequired();
+
+        distributor.ComplexCollection(
+            x => x.ShippingCenters,
+            addresses => addresses.ToJson());
+    });
+```
+
+---
+
+## Una colección completa en una sola columna
+
+Podemos crear:
+
+```csharp
+var distributor =
+    new Distributor
+    {
+        Name = "South Logistics",
+
+        ShippingCenters =
+        [
+            new Address
+            {
+                Street = "Av. del Libertador 5000",
+                City = "Buenos Aires",
+                PostalCode = "C1426",
+                Country = "Argentina"
+            },
+
+            new Address
+            {
+                Street = "Bv. San Juan 650",
+                City = "Córdoba",
+                PostalCode = "X5000",
+                Country = "Argentina"
+            }
+        ]
+    };
+```
+
+La columna `ShippingCenters` contiene conceptualmente:
+
+```json
+[
+  {
+    "Street": "Av. del Libertador 5000",
+    "City": "Buenos Aires",
+    "PostalCode": "C1426",
+    "Country": "Argentina"
+  },
+  {
+    "Street": "Bv. San Juan 650",
+    "City": "Córdoba",
+    "PostalCode": "X5000",
+    "Country": "Argentina"
+  }
+]
+```
+
+No se crea una tabla independiente para los centros.
+
+Eso abre una alternativa interesante para estructuras que pertenecen completamente al agregado y no necesitan identidad relacional propia.
+
+---
+
+## JSON no significa "guardar cualquier cosa"
+
+Que EF Core facilite JSON no significa que debamos transformar cada relación en un documento.
+
+Por ejemplo, una lista de órdenes de un cliente probablemente no debería convertirse automáticamente en:
+
+```text
+Customer.Orders
+→ JSON
+```
+
+si esas órdenes:
+
+- tienen identidad propia;
+- se consultan independientemente;
+- tienen relaciones;
+- necesitan índices y restricciones relacionales;
+- crecen sin un límite natural;
+- tienen ciclo de vida independiente.
+
+JSON encaja mejor cuando el contenido forma parte natural del mismo agregado.
+
+Por ejemplo:
+
+```text
+Address
+Settings
+ContactInformation
+Metadata
+Configuration
+small bounded collections
+```
+
+La decisión sigue siendo de modelado.
+
+No de comodidad.
+
+---
+
+## Ventajas del mapping JSON
+
+Hay varios beneficios posibles.
+
+### Menos columnas
+
+Un objeto con muchas propiedades puede almacenarse como una unidad:
+
+```text
+Address
+→ 1 columna
+```
+
+en lugar de:
+
+```text
+Address_Property1
+Address_Property2
+Address_Property3
+...
+```
+
+### Modelo híbrido
+
+Podemos mantener:
+
+```text
+relacional para entidades
++
+documental para valores internos
+```
+
+sin abandonar SQL Server.
+
+### Consultas tipadas
+
+Seguimos escribiendo:
+
+```csharp
+customer.ShippingAddress.City
+```
+
+y EF traduce la consulta.
+
+### Colecciones de valores complejos
+
+JSON permite representar estructuras que table splitting no puede representar naturalmente, como una colección de Complex Types dentro de una columna.
+
+---
+
+## Costos y trade-offs
+
+JSON también introduce decisiones.
+
+### Visibilidad del esquema
+
+Con columnas normales podemos ver directamente:
+
+```text
+ShippingAddress_City
+ShippingAddress_Country
+```
+
+En JSON el esquema interno vive más cerca de la aplicación.
+
+### Restricciones
+
+Las restricciones relacionales tradicionales sobre propiedades internas pueden requerir estrategias diferentes.
+
+### Índices
+
+Consultar frecuentemente rutas internas de JSON puede requerir un diseño específico de índices según la versión del motor.
+
+### Tamaño del documento
+
+Guardar estructuras sin límites claros dentro de una única fila puede generar documentos demasiado grandes.
+
+### Cambios de esquema
+
+Agregar o modificar propiedades dentro de documentos existentes requiere pensar en compatibilidad con datos históricos.
+
+JSON resuelve algunos problemas.
+
+No todos.
+
+---
+
+## SQL Server 2025 cambia parte de la historia
+
+EF Core 10 incorpora integración con el tipo nativo `json` disponible en SQL Server 2025 y escenarios compatibles de Azure SQL.
+
+Cuando EF trabaja con ese tipo puede aprovechar capacidades específicas del motor.
+
+Por ejemplo, las consultas escalares pueden usar:
+
+```sql
+JSON_VALUE(
+    [Details],
+    '$.Viewers' RETURNING int
+)
+```
+
+en lugar de recuperar texto y convertirlo después.
+
+Pero hay un detalle práctico importante:
+
+```text
+UseSqlServer(...)
+```
+
+en SQL Server local no implica automáticamente que EF use el tipo nativo `json`.
+
+El nivel de compatibilidad configurado importa.
+
+Por eso este laboratorio está preparado para funcionar también con SQL Server anterior almacenando JSON como `nvarchar(max)`.
+
+---
+
+## ¿Y las actualizaciones?
+
+Podemos modificar un objeto JSON cargado y persistirlo mediante:
+
+```csharp
+SaveChangesAsync()
+```
+
+como cualquier otro objeto administrado por EF.
+
+Pero EF Core 10 incorpora además otra mejora especialmente interesante:
+
+```text
+ExecuteUpdateAsync
++
+propiedades dentro de JSON
+```
+
+Eso permite realizar actualizaciones masivas sin materializar las entidades.
+
+No lo vamos a mezclar con este artículo.
+
+Es el siguiente laboratorio de la serie.
+
+---
+
+## El laboratorio completo
+
+El código se encuentra en:
+
+```text
+EfCore10Labs
+└── 03-JsonColumns
+    └── JsonColumns.Api
+```
+
+Utiliza:
+
+```text
+.NET 10
+EF Core 10.0.12
+ASP.NET Core Web API
+SQL Server
+```
+
+Las pruebas incluyen:
+
+```text
+POST /api/customers/seed
+
+GET /api/customers
+
+GET /api/customers/shipping-city/Buenos%20Aires
+
+GET /api/customers/without-billing-address
+
+GET /api/customers/shipping-cities
+
+POST /api/distributors/seed
+
+GET /api/distributors
+```
+
+Las consultas que nos interesa analizar devuelven también:
+
+```csharp
+query.ToQueryString()
+```
+
+para poder observar exactamente qué SQL generó EF en nuestro entorno.
+
+---
+
+## Conclusión
+
+El cambio central de este laboratorio puede resumirse en una sola llamada:
+
+```csharp
+ToJson()
+```
+
+Pero detrás de esa llamada hay un cambio de estrategia de persistencia.
+
+Con table splitting:
+
+```text
+Complex Type
+→ varias columnas
+```
+
+Con JSON:
+
+```text
+Complex Type
+→ un documento
+→ una columna
+```
+
+y nuestro código C# continúa trabajando con:
+
+```csharp
+customer.ShippingAddress.City
+```
+
+como si fuera cualquier otra propiedad del modelo.
+
+EF Core se ocupa de traducir esa navegación a las operaciones JSON que soporte el proveedor.
+
+EF Core 10 también nos permite ir un paso más allá con:
+
+```csharp
+ComplexCollection(...)
+```
+
+y representar colecciones de valores complejos como arrays JSON.
+
+Eso convierte a los Complex Types en una herramienta bastante más flexible que en su primera versión.
+
+La clave, sin embargo, no es comenzar a guardar todo como JSON.
+
+La clave es poder elegir entre:
+
+```text
+relacional
+```
+
+y:
+
+```text
+documental
+```
+
+dentro del mismo modelo, según la semántica real de los datos.
+
+En el próximo artículo vamos a utilizar este mismo mapping para estudiar una mejora directamente relacionada:
+
+```text
+ExecuteUpdate sobre propiedades JSON.
+```

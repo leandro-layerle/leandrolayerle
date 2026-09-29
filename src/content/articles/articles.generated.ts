@@ -12,7 +12,9 @@ import type { ComponentType } from "react";
 import type { ArticleMetadata } from "@/types/article";
 
 import ArticleContent0, { article as articleMetadata0 } from "./ef-core-10-complex-types-opcionales.mdx";
-import ArticleContent1, { article as articleMetadata1 } from "./ef-core-10-named-query-filters.mdx";
+import ArticleContent1, { article as articleMetadata1 } from "./ef-core-10-executeupdate-json.mdx";
+import ArticleContent2, { article as articleMetadata2 } from "./ef-core-10-json-columns.mdx";
+import ArticleContent3, { article as articleMetadata3 } from "./ef-core-10-named-query-filters.mdx";
 
 /* ============================================================
    TYPES
@@ -41,5 +43,19 @@ export const generatedArticles: GeneratedArticle[] = [
 
     content:
       ArticleContent1 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata2 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent2 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata3 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent3 as ComponentType,
   },
 ];
