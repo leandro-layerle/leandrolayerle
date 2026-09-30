@@ -12,9 +12,15 @@ import type { ComponentType } from "react";
 import type { ArticleMetadata } from "@/types/article";
 
 import ArticleContent0, { article as articleMetadata0 } from "./ef-core-10-complex-types-opcionales.mdx";
-import ArticleContent1, { article as articleMetadata1 } from "./ef-core-10-executeupdate-json.mdx";
-import ArticleContent2, { article as articleMetadata2 } from "./ef-core-10-json-columns.mdx";
-import ArticleContent3, { article as articleMetadata3 } from "./ef-core-10-named-query-filters.mdx";
+import ArticleContent1, { article as articleMetadata1 } from "./ef-core-10-dynamic-executeupdate.mdx";
+import ArticleContent2, { article as articleMetadata2 } from "./ef-core-10-executeupdate-json.mdx";
+import ArticleContent3, { article as articleMetadata3 } from "./ef-core-10-json-columns.mdx";
+import ArticleContent4, { article as articleMetadata4 } from "./ef-core-10-leftjoin-rightjoin.mdx";
+import ArticleContent5, { article as articleMetadata5 } from "./ef-core-10-migracion-desde-ef-core-9.mdx";
+import ArticleContent6, { article as articleMetadata6 } from "./ef-core-10-named-query-filters.mdx";
+import ArticleContent7, { article as articleMetadata7 } from "./ef-core-10-parameterized-collections.mdx";
+import ArticleContent8, { article as articleMetadata8 } from "./ef-core-10-security-improvements.mdx";
+import ArticleContent9, { article as articleMetadata9 } from "./ef-core-10-vector-search.mdx";
 
 /* ============================================================
    TYPES
@@ -57,5 +63,47 @@ export const generatedArticles: GeneratedArticle[] = [
 
     content:
       ArticleContent3 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata4 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent4 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata5 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent5 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata6 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent6 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata7 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent7 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata8 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent8 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata9 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent9 as ComponentType,
   },
 ];

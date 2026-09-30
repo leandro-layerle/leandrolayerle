@@ -1,0 +1,559 @@
+export const article = {
+  title: "EF Core 10: LeftJoin y RightJoin, joins más claros en LINQ",
+
+  slug: "ef-core-10-leftjoin-rightjoin",
+
+  excerpt:
+    "Qué problema resolvíamos con GroupJoin, SelectMany y DefaultIfEmpty, qué agrega .NET 10 y cómo EF Core 10 traduce LeftJoin y RightJoin a SQL.",
+
+  category: "EF Core",
+
+  tags: [
+    ".NET 10",
+    "EF Core 10",
+    "C#",
+    "LINQ",
+    "SQL Server",
+    "LeftJoin",
+    "RightJoin",
+  ],
+
+  date: "2026-09-29",
+
+  readingTime: "10 min",
+
+  image:
+    "/images/articles/ef-core-10-leftjoin-rightjoin.png",
+
+  repository:
+    "https://github.com/leandro-layerle/EfCore10Labs/tree/main/06-LeftJoin-RightJoin",
+
+  published: true,
+
+  series: "EF Core 10 New Features",
+  seriesOrder: 6,
+};
+
+Hay operaciones que usamos durante años y que, aunque funcionaban, nunca terminaron de sentirse naturales en LINQ.
+
+El `LEFT JOIN` es un buen ejemplo.
+
+En SQL la intención es directa:
+
+```sql
+SELECT ...
+FROM Customers AS c
+LEFT JOIN Orders AS o
+    ON c.Id = o.CustomerId;
+```
+
+Pero expresar exactamente esa intención con LINQ requería conocer un patrón bastante menos evidente.
+
+En .NET 10 esto cambia con los nuevos operadores `LeftJoin` y `RightJoin`. EF Core 10 reconoce esos operadores sobre `IQueryable` y puede traducirlos a los joins correspondientes en la base de datos.
+
+Pero conviene separar bien las responsabilidades: **los operadores son una novedad de .NET 10; EF Core 10 agrega soporte para traducirlos en consultas EF**.
+
+Vamos a comprobarlo con un laboratorio.
+
+## ¿Qué problema teníamos?
+
+Supongamos que tenemos clientes y órdenes.
+
+Queremos listar **todos los clientes**, incluso aquellos que todavía no realizaron ninguna compra.
+
+Conceptualmente necesitamos:
+
+```text
+Customers
+LEFT JOIN
+Orders
+```
+
+Los datos del laboratorio serán:
+
+```text
+Customers
+1 Ana
+2 Bruno
+3 Carla
+
+Orders
+1 CustomerId=1 Total=120
+2 CustomerId=1 Total=85
+3 CustomerId=2 Total=200
+4 CustomerId=99 Total=50
+```
+
+Hay dos casos deliberados:
+
+- Carla no tiene ninguna orden.
+- La orden 4 apunta a `CustomerId = 99`, para el cual no existe un cliente.
+
+Eso nos permite observar claramente qué conserva cada tipo de join.
+
+## ¿Cómo se hacía antes?
+
+Antes de .NET 10 no existía un operador LINQ `LeftJoin` de primera clase.
+
+Para expresar un LEFT JOIN con LINQ se utilizaba normalmente el patrón:
+
+```text
+GroupJoin
++
+SelectMany
++
+DefaultIfEmpty
+```
+
+En nuestro ejemplo:
+
+```csharp
+var result =
+    await _context.Customers
+        .GroupJoin(
+            _context.Orders,
+            customer => customer.Id,
+            order => order.CustomerId,
+            (customer, orders) => new
+            {
+                Customer = customer,
+                Orders = orders
+            })
+        .SelectMany(
+            item => item.Orders.DefaultIfEmpty(),
+            (item, order) => new
+            {
+                CustomerId = item.Customer.Id,
+                CustomerName = item.Customer.Name,
+                OrderId = order == null
+                    ? (int?)null
+                    : order.Id,
+                Total = order == null
+                    ? (decimal?)null
+                    : order.Total
+            })
+        .ToListAsync();
+```
+
+Esto no significa que EF Core no pudiera hacer LEFT JOIN antes.
+
+Podía hacerlo.
+
+El problema era **cómo debíamos expresar esa intención en LINQ**.
+
+## ¿Qué limitación existía?
+
+La limitación era principalmente de expresividad y legibilidad.
+
+Para escribir algo que conceptualmente era:
+
+```text
+LEFT JOIN
+```
+
+teníamos que conocer una combinación específica de tres operadores.
+
+Además, para un desarrollador que llega por primera vez al código, esto:
+
+```csharp
+GroupJoin(...)
+    .SelectMany(
+        x => x.Items.DefaultIfEmpty(),
+        ...)
+```
+
+no comunica inmediatamente la intención con la misma claridad que:
+
+```csharp
+LeftJoin(...)
+```
+
+También existe otra diferencia práctica: los proveedores `IQueryable`, como EF Core, deben reconocer patrones concretos para traducirlos al lenguaje de la base de datos.
+
+El patrón anterior funciona, pero introduce más ceremonia alrededor de una operación relacional muy común.
+
+## ¿Qué cambia ahora?
+
+Acá hay que distinguir dos novedades.
+
+### .NET 10
+
+.NET 10 incorpora operadores LINQ de primera clase:
+
+```text
+LeftJoin
+RightJoin
+```
+
+en `Enumerable` y `Queryable`.
+
+### EF Core 10
+
+EF Core 10 reconoce estos nuevos operadores cuando forman parte de una consulta `IQueryable`.
+
+Por eso ahora podemos escribir:
+
+```csharp
+var result =
+    await _context.Customers
+        .LeftJoin(
+            _context.Orders,
+            customer => customer.Id,
+            order => order.CustomerId,
+            (customer, order) => new
+            {
+                CustomerId = customer.Id,
+                CustomerName = customer.Name,
+                OrderId = order == null
+                    ? (int?)null
+                    : order.Id,
+                Total = order == null
+                    ? (decimal?)null
+                    : order.Total
+            })
+        .ToListAsync();
+```
+
+La intención queda explícita en el código.
+
+## El laboratorio
+
+El proyecto utiliza:
+
+- .NET 10
+- C# 14
+- EF Core 10.0.12
+- ASP.NET Core Web API
+- SQL Server
+- Visual Studio 2026
+
+Tenemos dos entidades muy pequeñas.
+
+### Customer
+
+```csharp
+public sealed class Customer
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+}
+```
+
+### Order
+
+```csharp
+public sealed class Order
+{
+    public int Id { get; set; }
+
+    public int? CustomerId { get; set; }
+
+    public decimal Total { get; set; }
+}
+```
+
+En este laboratorio no configuramos una foreign key física entre ambas tablas.
+
+No es una recomendación de modelado para producción.
+
+Lo hacemos deliberadamente para poder guardar una orden cuyo `CustomerId` no tenga coincidencia y así demostrar `RightJoin`.
+
+## Prueba 1: el LEFT JOIN anterior
+
+Endpoint:
+
+```text
+GET /api/joins/left/legacy
+```
+
+El objetivo es comprobar que el patrón histórico conserva a todos los clientes.
+
+Ana aparece dos veces porque tiene dos órdenes.
+
+Bruno aparece una vez.
+
+Carla también debe aparecer, aunque `OrderId` y `Total` sean `null`.
+
+Eso es justamente la semántica del LEFT JOIN.
+
+## Prueba 2: LeftJoin en .NET 10 + EF Core 10
+
+Ahora reemplazamos toda la ceremonia anterior por:
+
+```csharp
+var result =
+    await _context.Customers
+        .LeftJoin(
+            _context.Orders,
+            customer => customer.Id,
+            order => order.CustomerId,
+            (customer, order) => new
+            {
+                CustomerId = customer.Id,
+                CustomerName = customer.Name,
+                OrderId = order == null
+                    ? (int?)null
+                    : order.Id,
+                Total = order == null
+                    ? (decimal?)null
+                    : order.Total
+            })
+        .ToListAsync();
+```
+
+Endpoint:
+
+```text
+GET /api/joins/left
+```
+
+La semántica no cambió.
+
+Lo que cambió es **cómo expresamos la operación**.
+
+El código dice literalmente `LeftJoin`.
+
+Ese es el beneficio central de esta mejora.
+
+## ¿Qué SQL genera?
+
+La documentación oficial de EF Core 10 indica que reconoce el operador `LeftJoin` y lo traduce al join correspondiente.
+
+Conceptualmente esperamos observar en SQL Server:
+
+```sql
+FROM [Customers] AS [c]
+LEFT JOIN [Orders] AS [o]
+    ON [c].[Id] = [o].[CustomerId]
+```
+
+En el laboratorio dejamos habilitado:
+
+```json
+"Microsoft.EntityFrameworkCore.Database.Command": "Information"
+```
+
+para inspeccionar el SQL real desde el Output de Visual Studio.
+
+**Importante:** el fragmento anterior representa la forma SQL esperada según la traducción documentada. El SET no presenta una captura de ejecución como evidencia verificada porque el entorno donde fue generado no dispone del runtime/base SQL Server del laboratorio.
+
+## Prueba 3: RightJoin
+
+Ahora invertimos qué lado debe conservarse.
+
+```csharp
+var result =
+    await _context.Customers
+        .RightJoin(
+            _context.Orders,
+            customer => customer.Id,
+            order => order.CustomerId,
+            (customer, order) => new
+            {
+                CustomerId = customer == null
+                    ? (int?)null
+                    : customer.Id,
+                CustomerName = customer == null
+                    ? "[SIN CLIENTE]"
+                    : customer.Name,
+                OrderId = order.Id,
+                Total = order.Total
+            })
+        .ToListAsync();
+```
+
+Endpoint:
+
+```text
+GET /api/joins/right
+```
+
+`RightJoin` conserva todas las filas de la **segunda secuencia**.
+
+Por eso la orden:
+
+```text
+Order 4
+CustomerId = 99
+Total = 50
+```
+
+debe aparecer aunque no exista un Customer 99.
+
+En ese caso proyectamos:
+
+```text
+CustomerId   = null
+CustomerName = [SIN CLIENTE]
+OrderId      = 4
+Total        = 50
+```
+
+EF Core 10 documenta que este operador se traduce a `RIGHT JOIN`.
+
+## ¿LeftJoin y RightJoin pertenecen realmente a EF Core 10?
+
+Esta distinción es importante.
+
+No exactamente.
+
+`LeftJoin` y `RightJoin` son nuevos operadores estándar de LINQ incorporados en **.NET 10**.
+
+La mejora de **EF Core 10** consiste en reconocer esos operadores dentro de consultas EF y traducirlos a SQL.
+
+Por eso una descripción más precisa es:
+
+> .NET 10 incorpora LeftJoin y RightJoin a LINQ, y EF Core 10 agrega soporte para traducirlos en consultas a la base de datos.
+
+## ¿Puedo usarlos con query syntax?
+
+Por ahora no existe una construcción específica equivalente como:
+
+```csharp
+from ...
+left join ...
+```
+
+para estos nuevos operadores.
+
+La documentación de EF Core 10 señala que deben expresarse mediante method syntax.
+
+Es decir:
+
+```csharp
+context.Customers.LeftJoin(...)
+```
+
+y:
+
+```csharp
+context.Customers.RightJoin(...)
+```
+
+## ¿Qué casos reales resuelve?
+
+### Clientes sin ventas
+
+Queremos todos los clientes, incluso los que todavía no compraron.
+
+```text
+Customers LEFT JOIN Orders
+```
+
+### Productos sin movimientos
+
+Queremos encontrar productos aunque no tengan movimientos de stock.
+
+### Usuarios sin configuración
+
+Queremos listar usuarios y, cuando exista, su configuración opcional.
+
+### Datos externos sin correspondencia
+
+Un `RightJoin` puede ser útil cuando la segunda fuente representa registros que debemos conservar aunque no tengan correspondencia en la primera.
+
+Por ejemplo, movimientos importados cuyo identificador externo todavía no pudo asociarse a una entidad local.
+
+## ¿Cuándo conviene usarlo?
+
+Cuando la semántica que necesitamos es realmente un outer join y queremos que esa intención sea visible directamente en LINQ.
+
+Especialmente cuando:
+
+- trabajamos con fuentes que no tienen una navegación conveniente;
+- correlacionamos proyecciones;
+- consultamos tablas sin una relación navegable;
+- queremos conservar elementos sin coincidencia;
+- el patrón anterior hacía difícil entender la intención.
+
+## ¿Cuándo no?
+
+No debemos convertir todos los accesos relacionados en joins manuales.
+
+Si el modelo tiene relaciones correctamente configuradas y una navegación expresa mejor la consulta, esa navegación puede seguir siendo la opción más clara.
+
+Tampoco debemos elegir `RightJoin` sólo porque ahora existe.
+
+Muchas consultas pueden expresarse intercambiando el orden de las fuentes y utilizando `LeftJoin`, que suele resultar más familiar para muchos equipos.
+
+La elección debe expresar la semántica de la consulta, no demostrar que conocemos un operador nuevo.
+
+## Edge cases que debemos entender
+
+### 1. El elemento sin coincidencia puede ser null
+
+En un outer join, uno de los lados puede no existir.
+
+Por eso la proyección debe contemplarlo.
+
+```csharp
+CustomerName = customer == null
+    ? "[SIN CLIENTE]"
+    : customer.Name
+```
+
+### 2. LeftJoin y RightJoin son equijoins
+
+Los operadores correlacionan claves mediante igualdad.
+
+No son una API genérica para cualquier condición arbitraria de JOIN.
+
+### 3. Query syntax no tiene todavía un equivalente específico
+
+Hay que utilizar method syntax.
+
+### 4. IQueryable depende del provider
+
+Que un operador exista en LINQ no significa automáticamente que cualquier proveedor `IQueryable` pueda traducirlo.
+
+En nuestro caso, EF Core 10 documenta explícitamente su soporte.
+
+### 5. Un join manual no siempre es mejor que una navegación
+
+La claridad del modelo sigue importando.
+
+## ¿Qué aprendimos?
+
+La novedad de esta parte no consiste en que EF Core haya aprendido por primera vez a ejecutar un LEFT JOIN.
+
+Eso sería incorrecto.
+
+EF Core ya podía traducir el patrón anterior.
+
+El cambio es más interesante desde el diseño del código:
+
+```text
+ANTES
+
+GroupJoin
++ SelectMany
++ DefaultIfEmpty
+
+AHORA
+
+LeftJoin
+```
+
+y además tenemos:
+
+```text
+RightJoin
+```
+
+como operador explícito.
+
+.NET 10 mejora el vocabulario disponible en LINQ y EF Core 10 conecta ese nuevo vocabulario con SQL.
+
+El resultado es código cuya intención relacional resulta mucho más fácil de reconocer.
+
+## Repositorio
+
+El laboratorio completo corresponde a:
+
+```text
+EfCore10Labs
+└── 06-LeftJoin-RightJoin
+```
+
+La siguiente parte de la serie continuará con otra de las novedades de EF Core 10.
