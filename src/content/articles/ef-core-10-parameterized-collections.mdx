@@ -1,0 +1,336 @@
+export const article = {
+  title: "EF Core 10: Parameterized Collections y el nuevo MultipleParameters",
+
+  slug: "ef-core-10-parameterized-collections",
+
+  excerpt:
+    "Por qué EF Core 10 cambia la traducción predeterminada de colecciones parametrizadas y cómo comparar MultipleParameters, EF.Constant y EF.Parameter.",
+
+  category: "EF Core",
+
+  tags: [
+    ".NET 10",
+    "EF Core 10",
+    "C#",
+    "SQL Server",
+    "LINQ",
+    "Performance",
+  ],
+
+  date: "2026-09-29",
+
+  readingTime: "17 min",
+
+  image:
+    "/images/articles/ef-core-10-parameterized-collections.png",
+
+  repository:
+    "https://github.com/leandro-layerle/EfCore10Labs/tree/main/08-ParameterizedCollections",
+
+  published: true,
+
+  series: "EF Core 10 New Features",
+  seriesOrder: 8,
+};
+
+Hay consultas LINQ que parecen completamente inocentes:
+
+```csharp
+int[] ids = [1, 2, 3];
+
+var products =
+    await context.Products
+        .Where(product => ids.Contains(product.Id))
+        .ToListAsync();
+```
+
+Pero detrás de ese `Contains` existe una decisión importante:
+
+**¿cómo enviamos una colección a una base relacional que normalmente no acepta una lista como un único parámetro SQL?**
+
+Esa pregunta produjo distintos comportamientos a lo largo de EF Core y vuelve a cambiar en EF Core 10.
+
+---
+
+## 1. ¿Qué problema teníamos?
+
+Una misma consulta puede ejecutarse con:
+
+```text
+[1, 2, 3]
+```
+
+y después con:
+
+```text
+[7, 12, 20]
+```
+
+Conceptualmente es la misma consulta.
+
+Pero la forma de representar esa colección afecta al SQL, la caché de planes y la información de cardinalidad disponible para el optimizador.
+
+---
+
+## 2. ¿Cómo se hacía antes?
+
+La historia importa porque evita atribuirle a EF10 características que no son nuevas.
+
+### Antes de EF Core 8
+
+EF podía insertar los valores directamente:
+
+```sql
+WHERE [p].[Id] IN (1, 2, 3)
+```
+
+Es simple y el optimizador ve los valores, pero distintas listas generan distinto SQL.
+
+### EF Core 8 y 9
+
+El default pasó a utilizar una colección parametrizada. En SQL Server, una representación típica utiliza un parámetro JSON y `OPENJSON`.
+
+Conceptualmente:
+
+```sql
+@ids = '[1,2,3]'
+
+WHERE [p].[Id] IN (
+    SELECT [i].[value]
+    FROM OPENJSON(@ids) ...
+)
+```
+
+Esto estabiliza el texto SQL frente a cambios en los valores.
+
+---
+
+## 3. ¿Qué limitación existía?
+
+El parámetro JSON tiene una ventaja clara para la reutilización del plan, pero puede ocultarle al optimizador información útil sobre la cantidad de elementos de la colección.
+
+Por otro lado, convertir todo en constantes expone los valores pero vuelve a producir textos SQL diferentes.
+
+No existe una estrategia universalmente perfecta.
+
+---
+
+## 4. ¿Qué cambia ahora?
+
+EF Core 10 cambia el **default**.
+
+Una colección parametrizada pasa a traducirse mediante múltiples parámetros escalares:
+
+```sql
+WHERE [p].[Id] IN (@ids1, @ids2, @ids3)
+```
+
+La idea es conservar parametrización y, al mismo tiempo, darle al optimizador información sobre la cardinalidad.
+
+Esta es la novedad central de esta parte.
+
+---
+
+## 5. ¿Cómo se implementa?
+
+No necesitamos una sintaxis especial para obtener el nuevo comportamiento:
+
+```csharp
+var products =
+    await _context.Products
+        .Where(product => ids.Contains(product.Id))
+        .ToListAsync();
+```
+
+En EF Core 10, `MultipleParameters` es el modo predeterminado.
+
+---
+
+## 6. Control por consulta
+
+EF también permite elegir explícitamente.
+
+### Constant
+
+```csharp
+.Where(
+    product =>
+        EF.Constant(ids)
+            .Contains(product.Id))
+```
+
+Buscamos una traducción equivalente a:
+
+```sql
+WHERE [p].[Id] IN (1, 2, 3)
+```
+
+### Parameter
+
+```csharp
+.Where(
+    product =>
+        EF.Parameter(ids)
+            .Contains(product.Id))
+```
+
+En SQL Server buscamos el comportamiento de un único parámetro de colección, normalmente materializado mediante JSON/`OPENJSON`.
+
+### MultipleParameters
+
+```csharp
+.Where(
+    product =>
+        EF.MultipleParameters(ids)
+            .Contains(product.Id))
+```
+
+Esto fuerza explícitamente la estrategia que EF10 utiliza por defecto.
+
+---
+
+## 7. ¿Qué SQL genera?
+
+La documentación de EF Core 10 muestra para el nuevo default:
+
+```sql
+WHERE [p].[Id] IN (@ids1, @ids2, @ids3)
+```
+
+Pero en este artículo distinguimos documentación de evidencia.
+
+**DOCUMENTADO:** EF10 usa múltiples parámetros por defecto.
+
+**PENDIENTE DE VERIFICACIÓN LOCAL:** nombres exactos de parámetros y SQL completo emitido por EF Core 10.0.12 en nuestro laboratorio.
+
+El SQL real se capturará desde los logs de `Microsoft.EntityFrameworkCore.Database.Command`.
+
+---
+
+## 8. El detalle interesante: padding
+
+Todavía queda un problema.
+
+Una lista de tres elementos produce una forma SQL y una de ocho podría producir otra.
+
+EF10 reduce la cantidad de cardinalidades distintas mediante padding.
+
+Microsoft documenta que una colección de 8 valores puede traducirse usando 10 parámetros:
+
+```sql
+WHERE [p].[Id] IN (
+    @ids1,
+    @ids2,
+    @ids3,
+    @ids4,
+    @ids5,
+    @ids6,
+    @ids7,
+    @ids8,
+    @ids9,
+    @ids10)
+```
+
+Los parámetros adicionales repiten el último valor, por lo que no agregan resultados diferentes.
+
+Nuestro laboratorio contiene específicamente una prueba con ocho IDs para observar este comportamiento.
+
+---
+
+## 9. ¿Qué casos reales resuelve?
+
+Filtros de productos seleccionados, permisos sobre conjuntos de IDs, búsquedas por múltiples estados, filtros provenientes de una UI, lotes de entidades y consultas construidas a partir de selecciones del usuario.
+
+El punto no es `Contains` en sí.
+
+El punto es que una lista variable puede participar en una consulta que se ejecuta miles de veces con distintas cardinalidades.
+
+---
+
+## 10. ¿Cuándo conviene el default de EF10?
+
+Es un punto de partida razonable cuando queremos mantener parametrización y proporcionar cardinalidad al optimizador.
+
+Pero “es el default” no significa “es siempre la estrategia más rápida”.
+
+El rendimiento real depende del tamaño de las colecciones, distribución de datos, índices, frecuencia y planes elegidos por el motor.
+
+---
+
+## 11. ¿Cuándo elegir otra estrategia?
+
+`EF.Constant` puede ser útil cuando queremos que el SQL vea valores concretos y aceptamos generar diferentes textos SQL.
+
+`EF.Parameter` puede ser interesante si una carga de trabajo se beneficiaba del comportamiento EF8/EF9 basado en un único parámetro de colección.
+
+`EF.MultipleParameters` permite recuperar explícitamente el comportamiento EF10 cuando la configuración global fue modificada.
+
+La decisión debe basarse en medición, no en una regla universal.
+
+---
+
+## 12. Edge cases
+
+### Colecciones grandes
+
+Miles de valores pueden convertir una estrategia de múltiples parámetros en algo muy distinto a una lista pequeña.
+
+### Cambio EF9 → EF10
+
+Una aplicación puede devolver exactamente los mismos resultados pero generar SQL diferente después de actualizar.
+
+Eso convierte esta característica en un punto que merece pruebas de rendimiento durante una migración.
+
+### Plan cache
+
+Constantes distintas pueden producir textos SQL distintos.
+
+### Cardinalidad
+
+Un único parámetro JSON puede esconder información de cardinalidad al optimizador.
+
+### Padding
+
+El número de parámetros generado puede ser mayor que el número de valores originales. Eso no implica que EF esté buscando IDs adicionales.
+
+---
+
+## 13. ¿Qué aprendimos?
+
+El cambio parece pequeño:
+
+```text
+ids.Contains(product.Id)
+```
+
+no cambió.
+
+Pero su traducción predeterminada sí.
+
+La evolución puede resumirse así:
+
+```text
+pre-EF8
+    constantes inline
+
+EF8 / EF9
+    parámetro de colección
+    JSON / OPENJSON en SQL Server
+
+EF10
+    múltiples parámetros escalares por defecto
+```
+
+Y EF10 nos permite trabajar explícitamente con las tres estrategias:
+
+```text
+EF.Constant(...)
+EF.Parameter(...)
+EF.MultipleParameters(...)
+```
+
+La enseñanza más importante no es elegir una de memoria.
+
+Es entender que **la forma de parametrizar una colección modifica el SQL y puede modificar el plan de ejecución**, aun cuando nuestro LINQ parezca prácticamente idéntico.
+
+En el laboratorio vamos a capturar esas diferencias una por una.

@@ -1,0 +1,58 @@
+export const article = {
+  title: "EF Core 10: guía práctica para migrar desde EF Core 9",
+  slug: "ef-core-10-migracion-desde-ef-core-9",
+  excerpt: "Cómo actualizar una aplicación real de EF Core 9 a EF Core 10 y qué validar en SQL, migraciones y tooling.",
+  category: "EF Core",
+  tags: [".NET 10", "EF Core 10", "EF Core 9", "C#", "SQL Server", "Migrations"],
+  date: "2026-09-30",
+  readingTime: "19 min",
+  image: "/images/articles/ef-core-10-migracion-desde-ef-core-9.png",
+  repository: "https://github.com/leandro-layerle/EfCore10Labs/tree/main/10-Migration-EF9-to-EF10",
+  published: true,
+  series: "EF Core 10 New Features",
+  seriesOrder: 10,
+};
+
+# EF Core 10: guía práctica para migrar desde EF Core 9
+
+Actualizar Entity Framework Core no debería reducirse a cambiar una versión de NuGet. EF Core 10 es LTS y requiere .NET 10; una migración seria necesita baseline, upgrade, comparación y validación.
+
+## El problema
+Una aplicación puede compilar y aun así cambiar SQL generado, nombres de parámetros, estrategia de colecciones, tooling o comportamiento de migraciones.
+
+## Baseline EF Core 9
+Antes del upgrade ejecutamos la API, guardamos respuestas y capturamos el SQL de:
+
+```csharp
+.Where(product => ids.Contains(product.Id))
+```
+
+## Actualización
+Cambiamos `net9.0` por `net10.0` y los paquetes EF/ASP.NET 9.0.12 por 10.0.12.
+
+## Parameterized Collections
+EF10 documenta múltiples parámetros escalares como nuevo default:
+
+```sql
+WHERE [p].[Id] IN (@ids1, @ids2, @ids3)
+```
+
+También aplica padding en determinadas cardinalidades. La comparación válida es contra el SQL EF9 capturado realmente.
+
+## Nombres de parámetros
+EF10 simplifica nombres para aproximarlos a la variable original. Esto puede afectar snapshots, interceptores o loggers que dependan del texto exacto.
+
+## Migraciones
+No borramos las migraciones EF9. Después del upgrade generamos una migración de comprobación y la inspeccionamos antes de aplicarla.
+
+## Tooling
+En proyectos multi-target EF10 requiere `--framework` en los comandos de herramientas EF. Nuestro lab es single-target, por eso lo documentamos sin fingir reproducirlo.
+
+## Otros breaking changes
+Auditar según la aplicación: JSON en SQL Server/Azure SQL, Complex Types, APIs internas/conventions, infraestructura de diagnóstico, SQLite y multi-targeting.
+
+## Pruebas
+Repetimos exactamente los endpoints del baseline y comparamos resultado y SQL. Igual resultado funcional no significa igual SQL.
+
+## Conclusión
+Migrar con seguridad es: **baseline → upgrade → comparación → validación**. La actualización termina cuando entendemos qué cambió, no cuando desaparecen los paquetes desactualizados.

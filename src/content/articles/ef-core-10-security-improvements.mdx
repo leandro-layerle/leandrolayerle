@@ -1,0 +1,212 @@
+export const article = {
+  title: "EF Core 10: mejoras de seguridad en logs y Raw SQL",
+  slug: "ef-core-10-security-improvements",
+  excerpt:
+    "EF Core 10 evita que constantes inline sensibles terminen accidentalmente en logs y agrega un analyzer para detectar concatenaciones riesgosas en APIs Raw SQL.",
+  category: "EF Core",
+  tags: [
+    ".NET 10",
+    "EF Core 10",
+    "C#",
+    "SQL Server",
+    "Security",
+    "Logging",
+  ],
+  date: "2026-09-30",
+  readingTime: "16 min",
+  image: "/images/articles/ef-core-10-security-improvements.png",
+  repository:
+    "https://github.com/leandro-layerle/EfCore10Labs/tree/main/09-SecurityImprovements",
+  published: true,
+  series: "EF Core 10 New Features",
+  seriesOrder: 9,
+};
+
+# EF Core 10: mejoras de seguridad en logs y Raw SQL
+
+EF Core 10 incorpora dos mejoras pequeñas en superficie, pero muy relevantes cuando una aplicación trabaja con información sensible o necesita SQL dinámico: **redacta por defecto las constantes inline en los logs** y agrega un **analyzer para advertir concatenaciones dentro de APIs Raw SQL**.
+
+La clave de este artículo es separar estas novedades de mecanismos que ya existían. EF Core ya parametrizaba consultas, ya tenía `FromSql`, `FromSqlRaw` y `EnableSensitiveDataLogging()`. Lo nuevo es la protección adicional alrededor del logging y la advertencia temprana durante el desarrollo.
+
+## 1. ¿Qué problema teníamos?
+
+EF evita registrar valores de parámetros por defecto porque pueden contener PII o información sensible. Sin embargo, no todo valor termina siendo un parámetro SQL. Cuando forzábamos valores inline —por ejemplo mediante `EF.Constant()`— el valor formaba parte del texto SQL y podía terminar también en el log.
+
+El segundo problema aparece con SQL dinámico. `FromSqlRaw()` es necesario en escenarios donde una parte estructural del SQL cambia, como el nombre de una columna. Pero concatenar un fragmento no confiable dentro del SQL puede abrir la puerta a SQL injection.
+
+## 2. ¿Cómo se hacía antes?
+
+Para valores normales, EF ya ofrecía APIs parametrizadas:
+
+```csharp
+var users = await context.Users
+    .FromSql($"SELECT * FROM Users WHERE Email = {email}")
+    .ToListAsync();
+```
+
+Aunque parece interpolación común, `FromSql` recibe un `FormattableString`: el valor se convierte en un parámetro SQL separado.
+
+Cuando necesitábamos SQL estructuralmente dinámico, usábamos `FromSqlRaw()` y la responsabilidad de validar los fragmentos quedaba en nuestra aplicación.
+
+## 3. ¿Qué limitación existía?
+
+Había dos huecos. Primero, una constante inline podía exponer información en logs aunque el logging sensible no estuviera habilitado. Segundo, el compilador no nos llamaba la atención ante el patrón especialmente sospechoso de concatenar strings directamente dentro de una invocación Raw SQL.
+
+## 4. ¿Qué cambia ahora?
+
+EF Core 10 introduce dos defensas.
+
+### Constantes inline redactadas
+
+Supongamos:
+
+```csharp
+string[] roles = ["Administrator", "Manager"];
+
+var users = await context.Users
+    .Where(user =>
+        EF.Constant(roles).Contains(user.Role))
+    .ToListAsync();
+```
+
+El SQL real necesita los valores. Conceptualmente:
+
+```sql
+WHERE [u].[Role] IN (N'Administrator', N'Manager')
+```
+
+Pero EF10 genera para logging una representación redactada, conceptualmente:
+
+```sql
+WHERE [u].[Role] IN (?, ?)
+```
+
+La distinción es fundamental: **no se reemplazan los valores que recibe SQL Server; se protege la representación destinada al log**. EF10 incluso ajustó APIs internas de diagnóstico para distinguir el `DbCommand` real del `logCommandText`.
+
+### Analyzer para Raw SQL
+
+EF10 también advierte ante concatenaciones realizadas directamente dentro de una llamada Raw SQL:
+
+```csharp
+var users = context.Users.FromSqlRaw(
+    "SELECT * FROM Users WHERE [" +
+    fieldName +
+    "] IS NULL");
+```
+
+La advertencia no significa que todo SQL dinámico sea incorrecto. Significa que EF encontró un patrón que merece revisión.
+
+## 5. ¿Cómo se implementa?
+
+El laboratorio usa una entidad deliberadamente simple:
+
+```csharp
+public sealed class User
+{
+    public int Id { get; set; }
+    public required string DisplayName { get; set; }
+    public required string Email { get; set; }
+    public required string Role { get; set; }
+}
+```
+
+### Caso A: constantes inline
+
+```csharp
+var users = await _context.Users
+    .AsNoTracking()
+    .Where(user =>
+        EF.Constant(roles).Contains(user.Role))
+    .OrderBy(user => user.Id)
+    .ToListAsync();
+```
+
+### Caso B: valor parametrizado
+
+```csharp
+var users = await _context.Users
+    .FromSql(
+        $"SELECT * FROM Users WHERE Email = {email}")
+    .AsNoTracking()
+    .ToListAsync();
+```
+
+### Caso C: patrón que EF10 quiere que revisemos
+
+```csharp
+var users = await _context.Users
+    .FromSqlRaw(
+        "SELECT * FROM Users WHERE [" +
+        fieldName +
+        "] IS NULL")
+    .AsNoTracking()
+    .ToListAsync();
+```
+
+### Caso D: SQL dinámico controlado
+
+Un identificador SQL no puede enviarse simplemente como un parámetro. Para un conjunto cerrado de columnas, usamos una whitelist y parametrizamos solamente el valor:
+
+```csharp
+var allowedFields = new Dictionary<string, string>(
+    StringComparer.OrdinalIgnoreCase)
+{
+    ["Email"] = "Email",
+    ["Role"] = "Role",
+    ["DisplayName"] = "DisplayName"
+};
+
+if (!allowedFields.TryGetValue(fieldName, out var safeFieldName))
+{
+    return BadRequest();
+}
+
+var sql =
+    $"SELECT * FROM Users WHERE [{safeFieldName}] = @value";
+
+var parameter =
+    new SqlParameter("value", value);
+
+var users = await _context.Users
+    .FromSqlRaw(sql, parameter)
+    .AsNoTracking()
+    .ToListAsync();
+```
+
+## 6. ¿Qué SQL genera?
+
+En este set distinguimos **documentación** de **evidencia local**. Microsoft documenta que EF10 sigue enviando las constantes inline reales a la base, mientras que el texto de logging las reemplaza por `?`. El SQL y el warning exactos de nuestro proyecto quedan como evidencia pendiente hasta ejecutar el laboratorio con EF Core 10.0.12.
+
+Para `FromSql`, esperamos observar un parámetro separado para `email`; para `raw-validated`, el nombre de columna queda incorporado únicamente después de la whitelist y `value` viaja como `SqlParameter`.
+
+## 7. ¿Qué casos reales resuelve?
+
+La redacción ayuda en sistemas que envían logs a Application Insights, Seq, Elasticsearch, Splunk u otras plataformas centralizadas. Un log suele tener más lectores y mayor retención que la base de datos, por lo que evitar PII accidental es importante.
+
+El analyzer ayuda cuando mantenemos reportes, filtros administrativos, búsquedas avanzadas o integraciones legacy donde todavía necesitamos SQL dinámico.
+
+## 8. ¿Cuándo conviene usarlo?
+
+La redacción viene por defecto: conviene conservarla. Para consultas, preferí LINQ o APIs parametrizadas siempre que expresen correctamente el problema. Si necesitás SQL dinámico estructural, reducí los fragmentos posibles a un conjunto explícito y parametrizá los valores.
+
+## 9. ¿Cuándo no?
+
+No actives `EnableSensitiveDataLogging()` de manera permanente simplemente para obtener logs más cómodos. Puede exponer información que EF10 intenta proteger. Tampoco uses `FromSqlRaw()` cuando un `FromSql()` parametrizado resuelve el mismo caso.
+
+## 10. ¿Qué edge cases aparecen?
+
+Un nombre de columna no es equivalente a un valor: no podemos reemplazar `Email` por `@columnName` y esperar que SQL Server lo interprete como identificador. Por eso existen casos legítimos de SQL dinámico.
+
+La whitelist debe mapear a nombres conocidos por la aplicación; no alcanza con buscar caracteres peligrosos. Además, el analyzer es una defensa de desarrollo, no un firewall de runtime: que no aparezca una advertencia no convierte automáticamente una consulta en segura.
+
+Finalmente, habilitar sensitive logging cambia deliberadamente lo que puede terminar en logs; debe tratarse como una decisión de diagnóstico consciente.
+
+## 11. ¿Qué aprendimos?
+
+EF Core 10 no reemplaza las prácticas básicas de seguridad. Agrega dos capas útiles: evita una fuga accidental de constantes inline a los logs y detecta temprano un patrón riesgoso de Raw SQL.
+
+La idea más importante es distinguir **SQL ejecutado**, **SQL mostrado en logs** y **código analizado en compilación**. Son tres momentos distintos y EF10 mejora dos de ellos sin cambiar la responsabilidad del desarrollador sobre SQL dinámico.
+
+## Repositorio
+
+El laboratorio completo pertenece a la serie **EF Core 10 New Features**, Parte 09, carpeta `09-SecurityImprovements`.

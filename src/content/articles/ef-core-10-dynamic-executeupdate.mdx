@@ -1,0 +1,647 @@
+export const article = {
+  title: "EF Core 10: Dynamic ExecuteUpdate y el fin de los Expression Trees manuales",
+  slug: "ef-core-10-dynamic-executeupdate",
+  excerpt:
+    "EF Core 10 simplifica los updates condicionales: ahora ExecuteUpdate puede construir sus setters dinámicamente con C# normal.",
+  category: "EF Core",
+  tags: [".NET 10", "EF Core 10", "C#", "ExecuteUpdate", "SQL Server"],
+  date: "2026-09-29",
+  readingTime: "13 min",
+  image: "/images/articles/ef-core-10-dynamic-executeupdate.png",
+  repository:
+    "https://github.com/leandro-layerle/EfCore10Labs/tree/main/05-DynamicExecuteUpdate",
+  published: true,
+  series: "EF Core 10 New Features",
+  seriesOrder: 5,
+};
+
+En una API real, un update no siempre modifica las mismas columnas.
+
+Un request puede cambiar solamente el precio de un producto. Otro puede cambiar el nombre y el stock. Otro puede desactivarlo. El conjunto de propiedades a modificar se conoce recién cuando llega la petición.
+
+`ExecuteUpdate` ya nos permitía ejecutar un `UPDATE` directamente en la base de datos sin cargar primero las entidades. Esa parte **no es nueva de EF Core 10**: `ExecuteUpdate` existe desde EF Core 7.
+
+El problema era otro.
+
+Hasta EF Core 9, construir dinámicamente la lista de `SetProperty` podía obligarnos a manipular manualmente un **Expression Tree**. EF Core 10 cambia esa API y permite expresar la misma decisión con una lambda normal y control de flujo común de C#.
+
+En este artículo vamos a comprobar exactamente qué problema resuelve, cómo se hacía antes, cuál era la limitación y qué cambia ahora.
+
+## ¿Qué problema teníamos?
+
+Supongamos que tenemos este modelo:
+
+```csharp
+public sealed class Product
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+
+    public decimal Price { get; set; }
+
+    public int Stock { get; set; }
+
+    public bool IsActive { get; set; } = true;
+}
+```
+
+Y recibimos un request parcial:
+
+```csharp
+public sealed class UpdateProductRequest
+{
+    public string? Name { get; set; }
+
+    public decimal? Price { get; set; }
+
+    public int? Stock { get; set; }
+
+    public bool? IsActive { get; set; }
+}
+```
+
+El primer request podría ser:
+
+```json
+{
+  "price": 140
+}
+```
+
+Pero el siguiente podría ser:
+
+```json
+{
+  "name": "Mechanical Keyboard Pro",
+  "stock": 25
+}
+```
+
+La pregunta es simple:
+
+> ¿Cómo construimos un único `ExecuteUpdate` cuando no sabemos de antemano qué propiedades van a formar parte del `SET`?
+
+Con un update fijo no hay problema:
+
+```csharp
+var affectedRows =
+    await _context.Products
+        .Where(product =>
+            product.Id == id)
+        .ExecuteUpdateAsync(
+            setters =>
+                setters.SetProperty(
+                    product => product.Price,
+                    request.Price.Value));
+```
+
+Pero esa llamada tiene una forma conocida de antemano: siempre modifica `Price`.
+
+Nuestro problema aparece cuando la forma del `UPDATE` depende del request.
+
+## ¿Cómo se hacía antes de EF Core 10?
+
+En EF Core 9 y versiones anteriores, el argumento que definía los setters de `ExecuteUpdate` era un:
+
+```csharp
+Expression<Func<SetPropertyCalls<Product>, SetPropertyCalls<Product>>>
+```
+
+Eso tenía una consecuencia importante.
+
+Si queríamos construir dinámicamente los setters, no podíamos escribir simplemente un bloque con `if` y agregar llamadas a `SetProperty` según las condiciones.
+
+Había que construir o modificar el Expression Tree.
+
+Simplificando el patrón documentado por Microsoft, el código terminaba teniendo esta clase de estructura:
+
+```csharp
+Expression<Func<SetPropertyCalls<Product>, SetPropertyCalls<Product>>> setters =
+    currentSetters =>
+        currentSetters.SetProperty(
+            product => product.Price,
+            140m);
+
+if (updateName)
+{
+    var productParameter =
+        Expression.Parameter(
+            typeof(Product),
+            "product");
+
+    setters =
+        Expression.Lambda<
+            Func<
+                SetPropertyCalls<Product>,
+                SetPropertyCalls<Product>>>(
+            Expression.Call(
+                instance: setters.Body,
+                methodName:
+                    nameof(SetPropertyCalls<Product>.SetProperty),
+                typeArguments:
+                [
+                    typeof(string)
+                ],
+                arguments:
+                [
+                    Expression.Lambda<Func<Product, string>>(
+                        Expression.Property(
+                            productParameter,
+                            nameof(Product.Name)),
+                        productParameter),
+                    Expression.Constant(
+                        "Mechanical Keyboard Pro")
+                ]),
+            setters.Parameters);
+}
+```
+
+No necesitamos memorizar ese código para entender el problema. De hecho, esa es precisamente la cuestión.
+
+La intención funcional era sencilla:
+
+```text
+si vino Name -> actualizar Name
+si vino Price -> actualizar Price
+si vino Stock -> actualizar Stock
+si vino IsActive -> actualizar IsActive
+```
+
+Pero la representación técnica exigía trabajar con nodos de un árbol de expresiones.
+
+## ¿Qué limitación existía?
+
+La limitación no era que `ExecuteUpdate` sólo pudiera actualizar una propiedad.
+
+Tampoco era que no pudiera actualizar varias columnas: eso ya era posible.
+
+La limitación era **construir dinámicamente el conjunto de setters**.
+
+Microsoft describe explícitamente este escenario como difícil porque el parámetro era un Expression Tree. La construcción manual de esos árboles agregaba complejidad y era propensa a errores.
+
+Eso generaba una diferencia demasiado grande entre la intención del negocio y el código necesario para expresarla.
+
+Para un PATCH, por ejemplo, la decisión conceptual puede ser trivial. Sin embargo, la infraestructura necesaria para construir dinámicamente el árbol podía terminar siendo más compleja que la propia regla que queríamos implementar.
+
+## ¿Qué cambia en EF Core 10?
+
+EF Core 10 cambia el parámetro de setters de `ExecuteUpdate`/`ExecuteUpdateAsync`.
+
+En lugar de recibir un Expression Tree para ese configurador, ahora acepta una lambda regular.
+
+Eso permite escribir:
+
+```csharp
+var affectedRows =
+    await _context.Products
+        .Where(product =>
+            product.Id == id)
+        .ExecuteUpdateAsync(setters =>
+        {
+            if (request.Name is not null)
+            {
+                setters.SetProperty(
+                    product => product.Name,
+                    request.Name);
+            }
+
+            if (request.Price is not null)
+            {
+                setters.SetProperty(
+                    product => product.Price,
+                    request.Price.Value);
+            }
+
+            if (request.Stock is not null)
+            {
+                setters.SetProperty(
+                    product => product.Stock,
+                    request.Stock.Value);
+            }
+
+            if (request.IsActive is not null)
+            {
+                setters.SetProperty(
+                    product => product.IsActive,
+                    request.IsActive.Value);
+            }
+        });
+```
+
+Ahora el código se parece a la intención original.
+
+No estamos generando expresiones manualmente. Estamos usando control de flujo normal de C# para decidir qué setters registrar.
+
+Ese es **Dynamic ExecuteUpdate**.
+
+## Antes vs. ahora
+
+El contraste puede resumirse así:
+
+| Aspecto | EF Core 9 y anteriores | EF Core 10 |
+|---|---|---|
+| `ExecuteUpdate` | Sí | Sí |
+| Varios `SetProperty` | Sí | Sí |
+| Setters definidos de forma fija | Sí | Sí |
+| Construcción condicional de setters | Posible | Posible |
+| Mecanismo | Expression Trees manuales | Lambda regular + `if` |
+| Complejidad accidental | Alta | Mucho menor |
+
+Por eso es importante no vender esta novedad como “ahora EF puede hacer updates parciales”. Esa afirmación sería imprecisa.
+
+La mejora está en **cómo construimos dinámicamente esos updates**.
+
+## Laboratorio
+
+El laboratorio usa una Web API mínima con SQL Server y cuatro propiedades actualizables:
+
+```text
+Name
+Price
+Stock
+IsActive
+```
+
+La idea es comparar primero un update cuya forma está decidida de antemano y luego ejecutar distintas combinaciones con el endpoint dinámico.
+
+### Baseline: update fijo
+
+```csharp
+[HttpPatch("{id:int}/fixed")]
+public async Task<IActionResult> FixedUpdate(
+    int id,
+    [FromBody] UpdateProductRequest request)
+{
+    if (request.Price is null)
+    {
+        return BadRequest(new
+        {
+            message =
+                "Para esta prueba fija se requiere Price."
+        });
+    }
+
+    var affectedRows =
+        await _context.Products
+            .Where(product =>
+                product.Id == id)
+            .ExecuteUpdateAsync(
+                setters =>
+                    setters.SetProperty(
+                        product => product.Price,
+                        request.Price.Value));
+
+    if (affectedRows == 0)
+    {
+        return NotFound();
+    }
+
+    return Ok(new
+    {
+        affectedRows
+    });
+}
+```
+
+No hay decisión dinámica. `Price` forma parte del `SET` siempre.
+
+### Dynamic ExecuteUpdate
+
+Ahora agregamos el endpoint que representa la feature:
+
+```csharp
+[HttpPatch("{id:int}/dynamic")]
+public async Task<IActionResult> DynamicUpdate(
+    int id,
+    [FromBody] UpdateProductRequest request)
+{
+    if (request.Name is null &&
+        request.Price is null &&
+        request.Stock is null &&
+        request.IsActive is null)
+    {
+        return BadRequest(new
+        {
+            message =
+                "Debe indicar al menos una propiedad para actualizar."
+        });
+    }
+
+    var affectedRows =
+        await _context.Products
+            .Where(product =>
+                product.Id == id)
+            .ExecuteUpdateAsync(setters =>
+            {
+                if (request.Name is not null)
+                {
+                    setters.SetProperty(
+                        product => product.Name,
+                        request.Name);
+                }
+
+                if (request.Price is not null)
+                {
+                    setters.SetProperty(
+                        product => product.Price,
+                        request.Price.Value);
+                }
+
+                if (request.Stock is not null)
+                {
+                    setters.SetProperty(
+                        product => product.Stock,
+                        request.Stock.Value);
+                }
+
+                if (request.IsActive is not null)
+                {
+                    setters.SetProperty(
+                        product => product.IsActive,
+                        request.IsActive.Value);
+                }
+            });
+
+    if (affectedRows == 0)
+    {
+        return NotFound();
+    }
+
+    return Ok(new
+    {
+        affectedRows
+    });
+}
+```
+
+La parte importante no es la cantidad de `if`.
+
+La parte importante es que **podemos tener esos `if` dentro del configurador de `ExecuteUpdateAsync`**.
+
+## Prueba 1: actualizar solamente Price
+
+```http
+PATCH /api/products/1/dynamic
+Content-Type: application/json
+
+{
+  "price": 140
+}
+```
+
+Sólo se ejecuta:
+
+```csharp
+if (request.Price is not null)
+```
+
+Por lo tanto, esperamos que el `UPDATE` tenga únicamente `Price` en su `SET`.
+
+## Prueba 2: actualizar Name y Stock
+
+```http
+PATCH /api/products/1/dynamic
+Content-Type: application/json
+
+{
+  "name": "Mechanical Keyboard Pro",
+  "stock": 25
+}
+```
+
+Esta vez atraviesan dos condiciones.
+
+Esperamos que el SQL incluya `Name` y `Stock`, pero no `Price` ni `IsActive`.
+
+## Prueba 3: actualizar solamente IsActive
+
+```http
+PATCH /api/products/2/dynamic
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+```
+
+La misma implementación genera otra forma del `UPDATE`.
+
+Ese es el punto que queremos demostrar: **el conjunto de setters se construye en runtime con C# normal**.
+
+## ¿Qué SQL genera?
+
+El proyecto habilita logging de comandos EF Core:
+
+```json
+"Microsoft.EntityFrameworkCore.Database.Command": "Information"
+```
+
+Al ejecutar cada request debemos observar el SQL real en el Output de Visual Studio.
+
+Para un request sólo con `Price`, la forma esperada es conceptualmente:
+
+```sql
+UPDATE [p]
+SET [p].[Price] = @p
+FROM [Products] AS [p]
+WHERE [p].[Id] = @id;
+```
+
+Para `Name + Stock`, conceptualmente esperamos:
+
+```sql
+UPDATE [p]
+SET [p].[Name] = @name,
+    [p].[Stock] = @stock
+FROM [Products] AS [p]
+WHERE [p].[Id] = @id;
+```
+
+**Importante:** esos fragmentos representan la forma esperada, no una captura de ejecución de este SET. El entorno donde se generó el material no dispone del SDK .NET/SQL Server, por lo que el SQL exacto queda pendiente de validación local.
+
+El artículo debe actualizarse con la salida real después de ejecutar el laboratorio.
+
+## ¿Qué casos reales resuelve?
+
+### APIs PATCH o updates parciales
+
+Cuando un DTO representa campos opcionales y sólo queremos modificar los recibidos.
+
+### Backoffice administrativo
+
+Pantallas donde un operador puede cambiar diferentes combinaciones de estado, precio, stock u otros atributos sin cargar primero la entidad para hacer tracking.
+
+### Operaciones masivas configurables
+
+Procesos donde ciertas columnas se actualizan según opciones seleccionadas por el usuario o reglas calculadas antes de ejecutar la operación.
+
+### Servicios que ya conocen el cambio
+
+Si la aplicación ya sabe exactamente qué filas y propiedades debe modificar, `ExecuteUpdate` puede expresar el cambio directamente sin materializar entidades sólo para modificarlas.
+
+## ¿Cuándo conviene usarlo?
+
+Conviene considerarlo cuando:
+
+- queremos una operación set-based;
+- no necesitamos cargar la entidad para decidir el nuevo estado;
+- conocemos el filtro que identifica las filas;
+- el conjunto de columnas puede variar en runtime;
+- queremos evitar la complejidad de construir Expression Trees manualmente.
+
+La documentación de EF Core también señala que `ExecuteUpdate` es especialmente apropiado cuando sabemos qué entidades y propiedades queremos modificar o cuando queremos actualizar muchas filas según un criterio.
+
+## ¿Cuándo no conviene?
+
+No deberíamos elegir `ExecuteUpdate` automáticamente sólo porque ahora sea más cómodo.
+
+`SaveChanges` sigue siendo una mejor herramienta cuando necesitamos:
+
+- trabajar naturalmente con un grafo de entidades;
+- acumular varios cambios trackeados;
+- que EF detecte automáticamente qué propiedades cambiaron;
+- aprovechar el control de concurrencia automático basado en tokens;
+- persistir varias modificaciones relacionadas como una unidad de trabajo.
+
+Además, `ExecuteUpdate` ejecuta inmediatamente. No espera a un futuro `SaveChanges`.
+
+## Edge case 1: un request sin propiedades
+
+¿Qué pasa si llega esto?
+
+```json
+{}
+```
+
+En el laboratorio lo rechazamos antes de llegar a EF:
+
+```csharp
+if (request.Name is null &&
+    request.Price is null &&
+    request.Stock is null &&
+    request.IsActive is null)
+{
+    return BadRequest(...);
+}
+```
+
+Esto evita intentar una operación que no tiene nada que actualizar.
+
+## Edge case 2: null no siempre significa “no modificar”
+
+En nuestro DTO, `null` significa:
+
+```text
+esta propiedad no fue seleccionada para actualizar
+```
+
+Eso funciona para este laboratorio, pero no representa todos los contratos posibles.
+
+Si una propiedad de negocio pudiera establecerse legítimamente en `null`, necesitaríamos distinguir entre:
+
+```text
+propiedad ausente
+```
+
+y
+
+```text
+propiedad presente con valor null
+```
+
+Ese problema pertenece al diseño del contrato de actualización parcial. Dynamic ExecuteUpdate no lo resuelve automáticamente.
+
+## Edge case 3: Change Tracker
+
+`ExecuteUpdate` no sincroniza entidades que ya estén trackeadas.
+
+Si cargamos un `Product`, ejecutamos después un `ExecuteUpdate` sobre esa fila y seguimos usando la instancia trackeada, esa instancia puede conservar valores anteriores.
+
+Por eso debemos tener cuidado al mezclar `ExecuteUpdate` con modificaciones trackeadas en el mismo flujo.
+
+## Edge case 4: transacciones
+
+Cada invocación de `ExecuteUpdate` se ejecuta inmediatamente.
+
+Si necesitamos que varias operaciones formen una unidad atómica, debemos crear explícitamente una transacción.
+
+Dynamic ExecuteUpdate no cambia esa característica.
+
+## Edge case 5: concurrencia
+
+`SaveChanges` puede aplicar automáticamente concurrencia optimista cuando configuramos un concurrency token.
+
+`ExecuteUpdate` no utiliza el Change Tracker y no obtiene ese comportamiento automáticamente.
+
+Una estrategia documentada por Microsoft es incluir el token esperado en el `Where` y comprobar `affectedRows`:
+
+```csharp
+var affectedRows =
+    await context.Products
+        .Where(product =>
+            product.Id == id &&
+            product.Version == expectedVersion)
+        .ExecuteUpdateAsync(...);
+
+if (affectedRows == 0)
+{
+    // conflicto o fila inexistente
+}
+```
+
+La cantidad de filas afectadas deja de ser sólo un dato informativo: puede formar parte del control de concurrencia.
+
+## Un cambio pequeño en API, un cambio grande en legibilidad
+
+Esta feature no agrega una nueva operación SQL ni reemplaza `SaveChanges`.
+
+Lo que elimina es **complejidad accidental**.
+
+Antes, una regla de negocio como:
+
+```text
+si vino Price, actualizá Price
+si vino Stock, actualizá Stock
+```
+
+podía terminar representada por código dedicado a construir Expression Trees.
+
+Ahora puede escribirse prácticamente igual que la regla que estamos pensando.
+
+Ese tipo de mejora importa porque reduce la distancia entre intención y código.
+
+## ¿Qué aprendimos?
+
+`ExecuteUpdate` no es nuevo en EF Core 10.
+
+La novedad es que su configurador de setters deja de exigir un Expression Tree y pasa a aceptar una lambda regular.
+
+Eso resuelve un problema concreto: **construir dinámicamente qué propiedades participan de un UPDATE**.
+
+Antes era posible, pero requería manipulación manual de árboles de expresiones. Ahora podemos hacerlo con control de flujo normal de C#.
+
+También vimos que la mejora no elimina las características propias de `ExecuteUpdate`: ejecución inmediata, ausencia de sincronización con Change Tracker, transacciones explícitas cuando agrupamos operaciones y concurrencia que debemos controlar manualmente si la necesitamos.
+
+La conclusión no es “usar Dynamic ExecuteUpdate siempre”.
+
+La conclusión es más precisa:
+
+> Cuando `ExecuteUpdate` ya es la herramienta adecuada y la lista de columnas depende del runtime, EF Core 10 elimina una cantidad importante de complejidad accidental.
+
+## Repositorio
+
+El laboratorio de esta parte está preparado para publicarse en:
+
+```text
+EfCore10Labs/05-DynamicExecuteUpdate
+```
+
+Incluye Web API, README, archivo `.http`, código incremental y casos de prueba reproducibles.
+
+## Fuentes oficiales
+
+- Microsoft Learn — What's New in EF Core 10 — `ExecuteUpdateAsync now accepts a regular, non-expression lambda`.
+- Microsoft Learn — Breaking changes in EF Core 10 — cambio de `Expression<Func<...>>` a `Func<...>`.
+- Microsoft Learn — ExecuteUpdate and ExecuteDelete — Change Tracker, transacciones, concurrencia y limitaciones.
+- dotnet/efcore #32018 — issue que motivó la construcción dinámica de setters.

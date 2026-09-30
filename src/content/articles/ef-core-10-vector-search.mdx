@@ -1,0 +1,395 @@
+export const article = {
+  title: "EF Core 10: Vector Search con SQL Server 2025",
+
+  slug: "ef-core-10-vector-search",
+
+  excerpt:
+    "Cómo almacenar vectores con SqlVector`<float>` y ejecutar búsquedas de similitud exactas con EF.Functions.VectorDistance() y SQL Server 2025.",
+
+  category: "EF Core",
+
+  tags: [
+    ".NET 10",
+    "EF Core 10",
+    "C#",
+    "SQL Server 2025",
+    "Vector Search",
+    "AI",
+  ],
+
+  date: "2026-09-29",
+
+  readingTime: "16 min",
+
+  image:
+    "/images/articles/ef-core-10-vector-search.png",
+
+  repository:
+    "https://github.com/leandro-layerle/EfCore10Labs/tree/main/07-VectorSearch",
+
+  published: true,
+
+  series: "EF Core 10 New Features",
+  seriesOrder: 7,
+};
+
+Hasta ahora, en esta serie, trabajamos con características de EF Core 10 que mejoran cómo modelamos, actualizamos o consultamos datos relacionales.
+
+En esta parte aparece un escenario diferente: **buscar por similitud**.
+
+No queremos preguntar solamente:
+
+> ¿Qué documentos contienen exactamente estas palabras?
+
+Queremos poder preguntar:
+
+> ¿Qué documentos están más cerca de este significado?
+
+Ese es uno de los problemas que aparecen detrás de la búsqueda semántica y de arquitecturas RAG.
+
+Y EF Core 10 incorpora soporte de primera clase para trabajar con el tipo `vector` de SQL Server 2025 y traducir `EF.Functions.VectorDistance()` a `VECTOR_DISTANCE()`.
+
+---
+
+## 1. ¿Qué problema teníamos?
+
+Un embedding representa información mediante una colección de números.
+
+Simplificando muchísimo, podríamos imaginar:
+
+```text
+EF Core 10       -> [1.00, 0.00, 0.00]
+LINQ             -> [0.95, 0.05, 0.00]
+SQL Server       -> [0.80, 0.20, 0.00]
+Cocina           -> [0.00, 1.00, 0.00]
+Viajes           -> [0.00, 0.00, 1.00]
+```
+
+Los vectores reales suelen tener muchas más dimensiones y son generados por modelos de embeddings. Usamos tres dimensiones solamente para que el laboratorio sea visible, determinista y no dependa de una API externa.
+
+El problema consiste en almacenar esos vectores y encontrar cuáles están más cerca de un vector de consulta.
+
+---
+
+## 2. ¿Cómo se hacía antes?
+
+Antes del soporte nativo actual había varias alternativas: guardar los valores en formatos no vectoriales, calcular similitud fuera de SQL Server, usar soluciones especializadas o extensiones específicas.
+
+Eso agregaba infraestructura o conversiones alrededor de una operación que conceptualmente pertenece a la consulta.
+
+El punto importante no es que la búsqueda vectorial haya nacido con EF Core 10. La novedad que estudiamos es **la integración nativa del proveedor SQL Server de EF Core 10 con el tipo `vector` y `VECTOR_DISTANCE()` de SQL Server 2025**.
+
+---
+
+## 3. ¿Qué limitación existía?
+
+Sin esa integración, nuestro modelo EF no tenía una representación de primera clase del nuevo tipo vectorial de SQL Server ni una traducción LINQ oficial para calcular la distancia vectorial.
+
+Eso obligaba a salir del flujo normal de EF o incorporar soluciones adicionales.
+
+---
+
+## 4. ¿Qué cambia en EF Core 10?
+
+Podemos declarar una propiedad:
+
+```csharp
+public SqlVector<float> Embedding { get; set; }
+```
+
+y mapearla:
+
+```csharp
+document.Property(x => x.Embedding)
+    .HasColumnType("vector(3)");
+```
+
+Después podemos usar:
+
+```csharp
+EF.Functions.VectorDistance(
+    "cosine",
+    document.Embedding,
+    queryVector)
+```
+
+dentro de una consulta LINQ.
+
+Para SQL Server, este soporte requiere SQL Server 2025 o posterior.
+
+---
+
+## 5. ¿Cómo lo implementamos?
+
+Nuestro modelo es deliberadamente pequeño:
+
+```csharp
+using Microsoft.Data.SqlTypes;
+
+public sealed class Document
+{
+    public int Id { get; set; }
+
+    public required string Title { get; set; }
+
+    public required string Content { get; set; }
+
+    public SqlVector<float> Embedding { get; set; }
+}
+```
+
+La configuración:
+
+```csharp
+document.Property(x => x.Embedding)
+    .HasColumnType("vector(3)");
+```
+
+Y configuramos EF para SQL Server 2025:
+
+```csharp
+options.UseSqlServer(
+    connectionString,
+    sqlServerOptions =>
+        sqlServerOptions.UseCompatibilityLevel(170));
+```
+
+Importante: la configuración de compatibility level en EF controla qué capacidades puede utilizar el proveedor al generar SQL. No cambia por sí sola el compatibility level configurado dentro de la base.
+
+---
+
+## 6. Construyendo el vector de consulta
+
+El endpoint recibe tres números:
+
+```text
+x, y, z
+```
+
+y crea:
+
+```csharp
+var queryVector =
+    new SqlVector<float>(
+        new float[]
+        {
+            x,
+            y,
+            z
+        });
+```
+
+No estamos generando embeddings con IA todavía.
+
+Eso es intencional.
+
+Queremos comprobar primero el comportamiento de EF Core y SQL Server sin introducir OpenAI, Azure OpenAI, costos, claves, red ni resultados no deterministas.
+
+---
+
+## 7. La consulta vectorial
+
+La parte central del laboratorio es:
+
+```csharp
+var results =
+    await _context.Documents
+        .AsNoTracking()
+        .Select(document => new
+        {
+            document.Id,
+            document.Title,
+            document.Content,
+            Distance =
+                EF.Functions.VectorDistance(
+                    "cosine",
+                    document.Embedding,
+                    queryVector)
+        })
+        .OrderBy(document => document.Distance)
+        .Take(take)
+        .ToListAsync();
+```
+
+Cuanto menor sea la distancia, más cercano es el vector según la métrica elegida.
+
+En este ejemplo usamos:
+
+```text
+cosine
+```
+
+---
+
+## 8. ¿Qué SQL genera?
+
+La documentación oficial indica que `VectorDistance()` se traduce a `VECTOR_DISTANCE()`.
+
+La forma conceptual esperada es:
+
+```sql
+SELECT TOP(@take)
+    [d].[Id],
+    [d].[Title],
+    [d].[Content],
+    VECTOR_DISTANCE(
+        'cosine',
+        [d].[Embedding],
+        @queryVector) AS [Distance]
+FROM [Documents] AS [d]
+ORDER BY [Distance];
+```
+
+**Estado de esta evidencia: DOCUMENTADO / ESPERADO.**
+
+No presento este bloque como SQL capturado de nuestro laboratorio. El SQL real lo vamos a registrar desde los logs de EF cuando ejecutemos la API contra tu SQL Server 2025.
+
+---
+
+## 9. ¿Qué debería ocurrir en nuestro laboratorio?
+
+Con:
+
+```text
+[1, 0, 0]
+```
+
+esperamos que los documentos tecnológicos queden antes que cocina y viajes.
+
+Después probamos:
+
+```text
+[0, 1, 0]
+```
+
+y debería acercarse el documento de cocina.
+
+Finalmente:
+
+```text
+[0, 0, 1]
+```
+
+debería acercarse el documento de viajes.
+
+Estos resultados son **esperados**, todavía no evidencia ejecutada.
+
+---
+
+## 10. ¿Qué casos reales resuelve?
+
+La búsqueda vectorial aparece en escenarios como búsqueda semántica, recuperación de fragmentos para RAG, recomendación por similitud, búsqueda de productos similares, clasificación de contenido y recuperación de documentos relacionados.
+
+EF Core no genera el significado.
+
+El embedding normalmente se obtiene mediante un modelo externo. EF se ocupa aquí de representar el vector y expresar la consulta que SQL Server ejecutará.
+
+---
+
+## 11. ¿Cuándo conviene usarlo?
+
+Tiene sentido cuando ya trabajamos con SQL Server 2025/Azure SQL y queremos mantener la consulta vectorial integrada con nuestro modelo y consultas EF.
+
+También es atractivo cuando el conjunto candidato es razonable o puede reducirse previamente con filtros tradicionales.
+
+---
+
+## 12. ¿Cuándo no?
+
+No elegiría `VECTOR_DISTANCE()` exacto como solución automática para cualquier volumen.
+
+SQL Server debe calcular la distancia exacta para las filas candidatas. En datasets grandes esto puede ser costoso.
+
+Tampoco reemplaza una búsqueda textual tradicional cuando lo importante es encontrar términos exactos, códigos, identificadores o coincidencias léxicas.
+
+Y no necesitamos vectores simplemente porque una aplicación use IA.
+
+---
+
+## 13. Edge cases y precauciones
+
+### Todos los vectores deben respetar la dimensionalidad
+
+Una columna:
+
+```text
+vector(3)
+```
+
+espera vectores de tres dimensiones.
+
+En producción, la dimensión depende del modelo de embeddings elegido.
+
+### La métrica importa
+
+Coseno, distancia euclidiana y producto escalar no son intercambiables arbitrariamente. Debemos usar una métrica coherente con el modelo y el problema.
+
+### Búsqueda exacta no es búsqueda aproximada
+
+`VECTOR_DISTANCE()` calcula distancia exacta y no utiliza un índice vectorial para convertir mágicamente la consulta en ANN.
+
+No debemos confundir esta Parte 07 con `VECTOR_SEARCH()` aproximado.
+
+### El embedding no lo crea EF Core
+
+EF Core almacena y consulta el vector. La generación del embedding es otro componente de la arquitectura.
+
+### Migraciones vectoriales requieren atención
+
+Existen reportes de problemas en determinadas evoluciones de modelos EF10 con `SqlVector<float>`. Nuestro laboratorio parte de una base nueva, pero en un brownfield conviene probar específicamente la migración antes de asumir que agregar o modificar una columna vectorial será trivial.
+
+---
+
+## 14. Exact search vs approximate search
+
+Esta parte de la serie se concentra en:
+
+```text
+EF Core 10
+   ↓
+SqlVector<float>
+   ↓
+SQL Server vector(n)
+   ↓
+EF.Functions.VectorDistance()
+   ↓
+VECTOR_DISTANCE()
+   ↓
+búsqueda exacta
+```
+
+SQL Server también está evolucionando con `VECTOR_SEARCH()` e índices vectoriales para búsqueda aproximada. Es un tema relacionado, pero no lo mezclamos con la demostración principal de EF Core 10.
+
+---
+
+## 15. ¿Qué aprendimos?
+
+La característica importante no es simplemente poder guardar un `float[]`.
+
+EF Core 10 conecta tres piezas:
+
+```text
+modelo .NET
+    SqlVector<float>
+
+        ↓
+
+modelo SQL Server
+    vector(n)
+
+        ↓
+
+consulta LINQ
+    EF.Functions.VectorDistance()
+
+        ↓
+
+SQL Server
+    VECTOR_DISTANCE()
+```
+
+Eso permite mantener la búsqueda de similitud dentro de una consulta EF normal.
+
+Pero también deja clara una frontera arquitectónica: **EF Core no reemplaza al modelo de embeddings ni convierte automáticamente una búsqueda exacta en una solución vectorial escalable para millones de filas**.
+
+En el próximo paso del laboratorio vamos a comprobarlo contra SQL Server 2025 y capturar el SQL real.
