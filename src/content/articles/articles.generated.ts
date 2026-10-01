@@ -21,6 +21,7 @@ import ArticleContent6, { article as articleMetadata6 } from "./ef-core-10-named
 import ArticleContent7, { article as articleMetadata7 } from "./ef-core-10-parameterized-collections.mdx";
 import ArticleContent8, { article as articleMetadata8 } from "./ef-core-10-security-improvements.mdx";
 import ArticleContent9, { article as articleMetadata9 } from "./ef-core-10-vector-search.mdx";
+import ArticleContent10, { article as articleMetadata10 } from "./ef-core-pagination-skip-take-vs-keyset.mdx";
 
 /* ============================================================
    TYPES
@@ -105,5 +106,12 @@ export const generatedArticles: GeneratedArticle[] = [
 
     content:
       ArticleContent9 as ComponentType,
+  },
+  {
+    metadata:
+      articleMetadata10 as unknown as ArticleMetadata,
+
+    content:
+      ArticleContent10 as ComponentType,
   },
 ];

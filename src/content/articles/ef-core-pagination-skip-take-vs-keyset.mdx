@@ -1,0 +1,1508 @@
+export const article = {
+  title: "Paginación en EF Core: Skip/Take vs Keyset — tutorial práctico con 1 millón de registros",
+  slug: "ef-core-pagination-skip-take-vs-keyset",
+  excerpt: "Construimos una API con EF Core, provocamos un problema real de Skip/Take y comparamos Offset vs Keyset con 1.000.000 de registros y planes de ejecución de SQL Server.",
+  category: ".NET",
+  tags: ["EF Core", ".NET 10", "SQL Server", "Performance", "Pagination"],
+  date: "2026-10-01",
+  readingTime: "25 min",
+  image: "/images/articles/ef-core-pagination-skip-take-vs-keyset.png",
+  repository: "https://github.com/leandro-layerle/DotNetLabs/tree/main/01-Pagination-Offset-vs-Keyset-Api",
+  published: true,
+};
+
+# Paginación en EF Core: `Skip/Take` vs Keyset — tutorial práctico con 1 millón de registros
+
+`Skip` y `Take` son probablemente la forma más natural de implementar paginación con EF Core. El código es simple, se entiende rápido y, con pocos datos, parece resolver el problema perfectamente.
+
+Pero en este tutorial no vamos a quedarnos con la teoría.
+
+Vamos a construir una API con **.NET 10, EF Core 10 y SQL Server**, provocar un problema real de paginación, implementar Keyset Pagination y después llevar la tabla a **1.000.000 de registros** para observar qué consulta genera EF Core y qué hace realmente SQL Server.
+
+Al terminar habremos comprobado dos cosas diferentes:
+
+- qué puede ocurrir con Offset Pagination cuando los datos cambian entre requests;
+- qué ocurre en una página profunda cuando usamos `Skip/Take` frente a un cursor Keyset.
+
+> El laboratorio completo está disponible en `DotNetLabs/01-Pagination-Offset-vs-Keyset`.
+
+## Imaginemos este escenario
+
+Tenemos una API que lista pedidos.
+
+La interfaz muestra cinco pedidos por página y nuestra primera implementación utiliza la solución habitual:
+
+```csharp
+var orders = await _context.Orders
+    .AsNoTracking()
+    .OrderBy(order => order.Id)
+    .Skip((page - 1) * pageSize)
+    .Take(pageSize)
+    .ToListAsync();
+```
+
+Si el usuario pide la página 1:
+
+```text
+page = 1
+pageSize = 5
+```
+
+obtenemos los primeros cinco registros.
+
+Si pide la página 2, saltamos cinco y tomamos los siguientes cinco.
+
+Parece resuelto.
+
+Antes de darlo por terminado, hagamos dos experimentos.
+
+---
+
+# Parte 1 — Cuando los datos cambian entre páginas
+
+## 1. Prerrequisitos
+
+Para reproducir el laboratorio desde una máquina limpia necesitamos:
+
+- Visual Studio 2026 con el workload **ASP.NET and web development**;
+- SDK de .NET 10;
+- SQL Server Express (el laboratorio usa la instancia `SQLEXPRESS`);
+- SQL Server Management Studio (SSMS), que usaremos para cargar el dataset grande y observar los planes de ejecución.
+
+Podemos comprobar el SDK desde una terminal:
+
+```bash
+dotnet --version
+```
+
+El proyecto del repositorio utiliza SQL Server Express local. Si tu instancia tiene otro nombre, más adelante deberás adaptar la connection string. Por ejemplo, `Server=.\\SQLEXPRESS` sólo funciona si existe una instancia local llamada `SQLEXPRESS`.
+
+## 2. Crear la solución y la Web API
+
+Desde Visual Studio 2026:
+
+1. **Create a new project**.
+2. Elegimos **Blank Solution**.
+3. Nombre: `PaginationLab`.
+4. Sobre la solución: **Add → New Project**.
+5. Elegimos **ASP.NET Core Web API**.
+6. Nombre: `PaginationLab.Api`.
+7. Framework: **.NET 10**.
+8. Usamos **Controllers**; no necesitamos Minimal APIs para este laboratorio.
+9. Dejamos HTTPS habilitado.
+
+La estructura inicial queda así:
+
+```text
+PaginationLab/
+├── PaginationLab.slnx
+└── PaginationLab.Api/
+    ├── Controllers/
+    ├── Properties/
+    ├── Program.cs
+    └── appsettings.json
+```
+
+El repositorio terminado fija los puertos para que todos los requests del tutorial coincidan. Reemplazamos `Properties/launchSettings.json` por:
+
+```json
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7320;http://localhost:5320",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
+```
+
+Así el tutorial utilizará siempre:
+
+```text
+https://localhost:7320
+```
+
+Si Visual Studio solicita confiar en el certificado HTTPS de desarrollo, aceptamos. Si decidís conservar el puerto generado por tu template, reemplazá `7320` por ese puerto en todos los requests `.http`.
+
+## 3. Instalar EF Core
+
+Editamos `PaginationLab.Api.csproj` para dejar explícitas las dependencias del laboratorio:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>
+```
+
+Guardamos y dejamos que Visual Studio restaure NuGet.
+
+## 4. Crear la entidad `Order`
+
+Creamos la carpeta `Models` y el archivo `Models/Order.cs`:
+
+```csharp
+namespace PaginationLab.Api.Models;
+
+public class Order
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+}
+```
+
+`Id` será generado por SQL Server como `IDENTITY`. No vamos a asignarlo manualmente al crear los pedidos.
+
+## 5. Crear `AppDbContext`
+
+Creamos la carpeta `Data` y `Data/AppDbContext.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using PaginationLab.Api.Models;
+
+namespace PaginationLab.Api.Data;
+
+public class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
+    {
+    }
+
+    public DbSet<Order> Orders => Set<Order>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.HasKey(order => order.Id);
+
+            entity.Property(order => order.Number)
+                .HasMaxLength(20)
+                .IsRequired();
+        });
+    }
+}
+```
+
+## 6. Configurar SQL Server
+
+En `appsettings.json` configuramos la conexión:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=.\\SQLEXPRESS;Database=PaginationLabDb;Trusted_Connection=True;TrustServerCertificate=True"
+  }
+}
+```
+
+Si tu instancia no se llama `SQLEXPRESS`, éste es el punto donde debés adaptar `Server`.
+
+Ahora registramos el contexto en `Program.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using PaginationLab.Api.Data;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")));
+
+var app = builder.Build();
+
+app.UseHttpsRedirection();
+app.MapControllers();
+
+app.Run();
+```
+
+## 7. Crear el controller base
+
+Antes de agregar endpoints necesitamos crear el controller que los contendrá.
+
+Creamos `Controllers/OrdersController.cs`:
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using PaginationLab.Api.Data;
+
+namespace PaginationLab.Api.Controllers;
+
+[ApiController]
+[Route("api/orders")]
+public class OrdersController : ControllerBase
+{
+    private readonly AppDbContext _context;
+
+    public OrdersController(AppDbContext context)
+    {
+        _context = context;
+    }
+}
+```
+
+Todavía no tiene acciones. Lo importante es comprobar que la inyección de `AppDbContext` está correctamente armada.
+
+## 8. Compilar antes de crear la migration
+
+En Visual Studio ejecutamos:
+
+```text
+Build → Build Solution
+```
+
+No avancemos si la solución no compila. Es mejor detectar ahora un namespace, paquete o connection string mal configurado que atribuir el problema a EF Tools.
+
+## 9. Crear `InitialCreate`
+
+Abrimos:
+
+```text
+Tools → NuGet Package Manager → Package Manager Console
+```
+
+En **Default project** seleccionamos `PaginationLab.Api`. En este laboratorio el target project y el startup project son el mismo proyecto: `PaginationLab.Api`.
+
+Ejecutamos:
+
+```powershell
+Add-Migration InitialCreate
+```
+
+EF Core crea `Migrations` con `InitialCreate`, su metadata y `AppDbContextModelSnapshot`.
+
+La parte relevante del `Up()` es equivalente a:
+
+```csharp
+migrationBuilder.CreateTable(
+    name: "Orders",
+    columns: table => new
+    {
+        Id = table.Column<int>(type: "int", nullable: false)
+            .Annotation("SqlServer:Identity", "1, 1"),
+        Number = table.Column<string>(
+            type: "nvarchar(20)",
+            maxLength: 20,
+            nullable: false)
+    },
+    constraints: table =>
+    {
+        table.PrimaryKey("PK_Orders", x => x.Id);
+    });
+```
+
+Este checkpoint nos permite verificar dos decisiones importantes antes de tocar la base:
+
+- `Id` será `IDENTITY(1,1)`;
+- `Number` será `nvarchar(20) NOT NULL`.
+
+El proyecto final del repositorio ya incluye esta migration, por lo que quien clone el lab no necesita ejecutar `Add-Migration` nuevamente: sólo debe aplicar las migrations existentes con `Update-Database`.
+
+### Alternativa con `dotnet ef`
+
+Si preferís CLI, primero necesitás tener instalada la herramienta `dotnet-ef`. Podés comprobarlo con:
+
+```bash
+dotnet ef --version
+```
+
+Si no está instalada:
+
+```bash
+dotnet tool install --global dotnet-ef
+```
+
+Desde la carpeta de la solución, los comandos equivalentes son:
+
+```bash
+dotnet ef migrations add InitialCreate --project PaginationLab.Api --startup-project PaginationLab.Api
+dotnet ef database update --project PaginationLab.Api --startup-project PaginationLab.Api
+```
+
+En este tutorial continuaremos con Package Manager Console.
+
+## 10. Aplicar la migration
+
+En Package Manager Console ejecutamos:
+
+```powershell
+Update-Database
+```
+
+Ahora sí debe existir físicamente `PaginationLabDb`.
+
+Abrimos SSMS, nos conectamos a la **misma instancia** configurada en la connection string (`.\\SQLEXPRESS` en nuestro caso), refrescamos **Databases** y verificamos:
+
+```text
+PaginationLabDb
+└── Tables
+    ├── dbo.Orders
+    └── dbo.__EFMigrationsHistory
+```
+
+En `dbo.Orders` debemos encontrar `Id` y `Number`. Este checkpoint cierra la creación del esquema: a partir de acá las pruebas sólo manipularán datos.
+
+## 11. Crear el archivo `.http`
+
+En `PaginationLab.Api` creamos `PaginationLab.Api.http` y empezamos con:
+
+```http
+@host = https://localhost:7320
+```
+
+A medida que avancemos iremos agregando los requests. Visual Studio permite ejecutarlos directamente desde este archivo.
+
+## 12. Ejecutar la API
+
+Marcamos `PaginationLab.Api` como Startup Project si fuera necesario y ejecutamos con **Ctrl+F5** o **F5**.
+
+Debemos ver que la aplicación escucha en:
+
+```text
+https://localhost:7320
+```
+
+Cada vez que agreguemos código y no estemos usando Hot Reload, detenemos, compilamos y volvemos a ejecutar la API antes de probar el nuevo endpoint.
+
+A partir de este punto ya tenemos una API ejecutándose, una base creada por migrations y un cliente `.http` listo. Ahora sí podemos empezar el experimento.
+
+## 13. Preparar 20 pedidos
+
+En `OrdersController` agregamos un endpoint que limpia los pedidos existentes, reinicia el `IDENTITY` y crea 20 pedidos:
+
+```csharp
+[HttpPost("setup-correctness")]
+public async Task<IActionResult> SetupCorrectness()
+{
+    await _context.Orders.ExecuteDeleteAsync();
+
+    await _context.Database.ExecuteSqlRawAsync(
+        "DBCC CHECKIDENT ('Orders', RESEED, 0);");
+
+    var orders = Enumerable.Range(1, 20)
+        .Select(number => new Order
+        {
+            Number = $"ORD-{number:000}"
+        })
+        .ToList();
+
+    _context.Orders.AddRange(orders);
+    await _context.SaveChangesAsync();
+
+    return Ok(new
+    {
+        message = "Dataset de consistencia reiniciado.",
+        count = orders.Count,
+        ids = orders.Select(order => order.Id)
+    });
+}
+```
+
+Hay dos detalles importantes:
+
+- `ExecuteDeleteAsync()` elimina los datos sin destruir el esquema creado por la migration.
+- `DBCC CHECKIDENT` reinicia el `IDENTITY`, de modo que cada repetición del laboratorio vuelva a comenzar en `Id = 1`.
+
+No asignamos `Id` manualmente: SQL Server sigue siendo responsable de generarlo.
+
+Ejecutamos:
+
+```http
+POST https://localhost:7320/api/orders/setup-correctness
+```
+
+El resultado debe contener 20 registros con IDs del 1 al 20.
+
+## 14. Implementar Offset Pagination
+
+Ahora agregamos nuestra primera estrategia:
+
+```csharp
+[HttpGet("offset")]
+public async Task<IActionResult> Offset(int page = 1, int pageSize = 5)
+{
+    if (page < 1 || pageSize < 1)
+    {
+        return BadRequest("page y pageSize deben ser mayores que cero.");
+    }
+
+    var orders = await _context.Orders
+        .AsNoTracking()
+        .OrderBy(order => order.Id)
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .Select(order => new
+        {
+            order.Id,
+            order.Number
+        })
+        .ToListAsync();
+
+    return Ok(new
+    {
+        strategy = "offset",
+        page,
+        pageSize,
+        ids = orders.Select(order => order.Id),
+        orders
+    });
+}
+```
+
+Pedimos la primera página:
+
+```http
+GET https://localhost:7320/api/orders/offset?page=1&pageSize=5
+```
+
+En nuestro laboratorio obtuvimos:
+
+```text
+1, 2, 3, 4, 5
+```
+
+Hasta acá no hay ninguna sorpresa.
+
+## 15. Ahora cambiemos los datos
+
+Imaginemos que el usuario sigue mirando esos cinco pedidos y, mientras tanto, otro proceso elimina el pedido `3`.
+
+Agregamos:
+
+```csharp
+[HttpDelete("{id:int}")]
+public async Task<IActionResult> Delete(int id)
+{
+    var order = await _context.Orders.FindAsync(id);
+
+    if (order is null)
+    {
+        return NotFound();
+    }
+
+    _context.Orders.Remove(order);
+    await _context.SaveChangesAsync();
+
+    return Ok(new
+    {
+        message = $"Order {id} eliminado.",
+        deletedId = id
+    });
+}
+```
+
+Y ejecutamos:
+
+```http
+DELETE https://localhost:7320/api/orders/3
+```
+
+Ahora nuestros datos son conceptualmente:
+
+```text
+1, 2, 4, 5, 6, 7, 8, 9, 10, 11...
+```
+
+El usuario ya vio la página 1. Pidamos la página 2:
+
+```http
+GET https://localhost:7320/api/orders/offset?page=2&pageSize=5
+```
+
+Podríamos esperar:
+
+```text
+6, 7, 8, 9, 10
+```
+
+Pero eso **no fue lo que ocurrió**.
+
+El resultado real de nuestro laboratorio fue:
+
+```text
+7, 8, 9, 10, 11
+```
+
+### ¿Dónde quedó el pedido 6?
+
+La segunda consulta hace esto:
+
+```csharp
+.Skip(5)
+.Take(5)
+```
+
+Pero `Skip(5)` no sabe qué cinco registros vio anteriormente el usuario. Trabaja sobre el estado **actual** del resultado.
+
+Después del `DELETE`, los primeros cinco registros son:
+
+```text
+1, 2, 4, 5, 6 | 7, 8, 9, 10, 11
+↑ Skip(5)        ↑ Take(5)
+```
+
+Por eso el `6` fue descartado.
+
+El registro existe. Simplemente **ese usuario nunca llegó a verlo**.
+
+Éste no es un comportamiento específico de nuestro ejemplo: la documentación de EF Core advierte que la paginación basada en offset puede omitir o repetir registros cuando el conjunto cambia entre consultas.
+
+---
+
+# Parte 2 — Implementar Keyset Pagination
+
+Probemos otra estrategia.
+
+En lugar de recordar:
+
+```text
+Estoy en la página 2
+```
+
+vamos a recordar:
+
+```text
+El último Id que vi fue 5
+```
+
+Ese valor funciona como cursor.
+
+## 16. Crear el endpoint Keyset
+
+Agregamos:
+
+```csharp
+[HttpGet("keyset")]
+public async Task<IActionResult> Keyset(int lastId = 0, int pageSize = 5)
+{
+    if (lastId < 0 || pageSize < 1)
+    {
+        return BadRequest("Parámetros inválidos.");
+    }
+
+    var orders = await _context.Orders
+        .AsNoTracking()
+        .Where(order => order.Id > lastId)
+        .OrderBy(order => order.Id)
+        .Take(pageSize)
+        .Select(order => new
+        {
+            order.Id,
+            order.Number
+        })
+        .ToListAsync();
+
+    var nextLastId = orders.Count == 0
+        ? lastId
+        : orders[^1].Id;
+
+    return Ok(new
+    {
+        strategy = "keyset",
+        lastId,
+        pageSize,
+        nextLastId,
+        ids = orders.Select(order => order.Id),
+        orders
+    });
+}
+```
+
+La diferencia central está acá:
+
+```csharp
+.Where(order => order.Id > lastId)
+```
+
+No estamos calculando una posición. Estamos diciendo desde qué registro queremos continuar.
+
+## 17. Repetir exactamente el mismo experimento
+
+Primero reiniciamos:
+
+```http
+POST https://localhost:7320/api/orders/setup-correctness
+```
+
+Pedimos la primera página:
+
+```http
+GET https://localhost:7320/api/orders/keyset?lastId=0&pageSize=5
+```
+
+Resultado:
+
+```text
+1, 2, 3, 4, 5
+```
+
+La respuesta también nos entrega:
+
+```text
+nextLastId = 5
+```
+
+Ése es nuestro cursor.
+
+Ahora repetimos exactamente el mismo cambio:
+
+```http
+DELETE https://localhost:7320/api/orders/3
+```
+
+Y pedimos los registros posteriores al último que vimos:
+
+```http
+GET https://localhost:7320/api/orders/keyset?lastId=5&pageSize=5
+```
+
+Esta vez obtuvimos:
+
+```text
+6, 7, 8, 9, 10
+```
+
+El `DELETE 3` no cambió nuestro punto de continuación porque ya no dependemos de contar cinco posiciones desde el comienzo.
+
+Dependemos de una condición explícita:
+
+```csharp
+order.Id > 5
+```
+
+Hasta acá demostramos un problema de **consistencia de navegación**.
+
+Pero todavía queda una segunda pregunta.
+
+---
+
+# Parte 3 — ¿Qué pasa cuando la tabla tiene 1.000.000 de registros?
+
+Con 20 filas, cualquier estrategia parece rápida.
+
+Llevemos el escenario a algo más interesante.
+
+Queremos una tabla con **1.000.000 de pedidos** y después pedir solamente los últimos 20.
+
+## 18. Preparar el dataset de performance
+
+Para esta parte utilizamos SQL únicamente para preparar rápidamente los datos. No estamos evaluando inserciones de EF Core, por lo que no tendría sentido convertir el seed en parte del experimento.
+
+Detenemos la API si queremos evitar ruido mientras preparamos el dataset. Abrimos **SSMS**, nos conectamos a la misma instancia `.\SQLEXPRESS`, seleccionamos `PaginationLabDb` y elegimos **New Query**.
+
+El SET también incluye `setup-performance.sql`, pero podemos copiar el siguiente script directamente:
+
+```sql
+SET NOCOUNT ON;
+
+DELETE FROM Orders;
+DBCC CHECKIDENT ('Orders', RESEED, 0);
+
+;WITH
+E1(N) AS
+(
+    SELECT 1
+    FROM (VALUES
+        (1),(1),(1),(1),(1),(1),(1),(1),(1),(1)
+    ) AS X(N)
+),
+E2(N) AS
+(
+    SELECT 1
+    FROM E1 A
+    CROSS JOIN E1 B
+),
+E4(N) AS
+(
+    SELECT 1
+    FROM E2 A
+    CROSS JOIN E2 B
+),
+E6(N) AS
+(
+    SELECT 1
+    FROM E4 A
+    CROSS JOIN E2 B
+),
+Numbers AS
+(
+    SELECT TOP (1000000)
+        ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS N
+    FROM E6
+)
+INSERT INTO Orders (Number)
+SELECT
+    'ORD-' + RIGHT('0000000' + CAST(N AS varchar(7)), 7)
+FROM Numbers;
+
+SELECT
+    COUNT(*) AS TotalOrders,
+    MIN(Id) AS MinId,
+    MAX(Id) AS MaxId
+FROM Orders;
+```
+
+La idea de las CTE `E1`, `E2`, `E4` y `E6` es multiplicar conjuntos mediante `CROSS JOIN`:
+
+```text
+E1 →         10 filas
+E2 →        100 filas
+E4 →     10.000 filas
+E6 →  1.000.000 filas
+```
+
+Después `ROW_NUMBER()` transforma ese millón de filas en una secuencia `1..1.000.000` y hacemos un único `INSERT ... SELECT` set-based.
+
+Al finalizar verificamos:
+
+```text
+TotalOrders = 1000000
+MinId       = 1
+MaxId       = 1000000
+```
+
+El SQL sólo prepara el escenario. Las consultas que vamos a comparar salen de **EF Core**.
+
+No continuamos hasta obtener esos tres valores. Después volvemos a ejecutar `PaginationLab.Api` y comprobamos que siga escuchando en `https://localhost:7320`.
+
+---
+
+# Parte 4 — Página 50.000 con `Skip/Take`
+
+## 19. Medir Offset desde EF Core
+
+Con un `pageSize` de 20, la página 50.000 necesita saltar:
+
+```text
+(50000 - 1) × 20 = 999980
+```
+
+Agregamos un endpoint que además nos permita observar el SQL generado por EF Core:
+
+```csharp
+[HttpGet("performance/offset")]
+public async Task<IActionResult> PerformanceOffset(
+    int page = 1,
+    int pageSize = 20)
+{
+    if (page < 1 || pageSize < 1)
+    {
+        return BadRequest("page y pageSize deben ser mayores que cero.");
+    }
+
+    var skip = (page - 1) * pageSize;
+
+    var query = _context.Orders
+        .AsNoTracking()
+        .OrderBy(order => order.Id)
+        .Skip(skip)
+        .Take(pageSize);
+
+    var sql = query.ToQueryString();
+
+    var stopwatch = Stopwatch.StartNew();
+    var orders = await query.ToListAsync();
+    stopwatch.Stop();
+
+    return Ok(new
+    {
+        strategy = "offset",
+        page,
+        pageSize,
+        skip,
+        elapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds,
+        sql,
+        ids = orders.Select(order => order.Id)
+    });
+}
+```
+
+Para `Stopwatch` necesitamos:
+
+```csharp
+using System.Diagnostics;
+```
+
+> **Nota de producción:** para mantener el laboratorio enfocado usamos `int` y una validación mínima. En una API pública también deberíamos limitar `page`/`pageSize` y proteger el cálculo de `skip` frente a valores extremos. Eso no cambia el fenómeno que estamos midiendo.
+
+Ejecutamos:
+
+```http
+GET https://localhost:7320/api/orders/performance/offset?page=50000&pageSize=20
+```
+
+EF Core devolvió los IDs:
+
+```text
+999981 ... 1000000
+```
+
+y `ToQueryString()` mostró:
+
+```sql
+DECLARE @p int = 999980;
+DECLARE @p1 int = 20;
+
+SELECT [o].[Id], [o].[Number]
+FROM [Orders] AS [o]
+ORDER BY [o].[Id]
+OFFSET @p ROWS FETCH NEXT @p1 ROWS ONLY
+```
+
+Pedimos solamente 20 filas, pero le estamos diciendo a SQL Server que primero se desplace `999.980` posiciones.
+
+¿Qué ocurre si expresamos la misma navegación como Keyset?
+
+---
+
+# Parte 5 — Los mismos 20 registros con Keyset
+
+## 20. Medir Keyset desde EF Core
+
+Agregamos:
+
+```csharp
+[HttpGet("performance/keyset")]
+public async Task<IActionResult> PerformanceKeyset(
+    int lastId = 0,
+    int pageSize = 20)
+{
+    if (lastId < 0 || pageSize < 1)
+    {
+        return BadRequest(
+            "lastId debe ser mayor o igual a cero y pageSize mayor que cero.");
+    }
+
+    var query = _context.Orders
+        .AsNoTracking()
+        .Where(order => order.Id > lastId)
+        .OrderBy(order => order.Id)
+        .Take(pageSize);
+
+    var sql = query.ToQueryString();
+
+    var stopwatch = Stopwatch.StartNew();
+    var orders = await query.ToListAsync();
+    stopwatch.Stop();
+
+    return Ok(new
+    {
+        strategy = "keyset",
+        lastId,
+        pageSize,
+        elapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds,
+        sql,
+        ids = orders.Select(order => order.Id)
+    });
+}
+```
+
+Ejecutamos:
+
+```http
+GET https://localhost:7320/api/orders/performance/keyset?lastId=999980&pageSize=20
+```
+
+El resultado contiene **exactamente los mismos 20 IDs**:
+
+```text
+999981 ... 1000000
+```
+
+Pero el SQL generado cambia:
+
+```sql
+DECLARE @p int = 20;
+DECLARE @lastId int = 999980;
+
+SELECT TOP(@p) [o].[Id], [o].[Number]
+FROM [Orders] AS [o]
+WHERE [o].[Id] > @lastId
+ORDER BY [o].[Id]
+```
+
+Ahora tenemos dos consultas que devuelven el mismo resultado:
+
+```text
+OFFSET
+OFFSET 999980 ROWS
+FETCH NEXT 20 ROWS ONLY
+```
+
+frente a:
+
+```text
+KEYSET
+WHERE Id > 999980
+TOP 20
+```
+
+La pregunta ya no es si funcionan. Las dos funcionan.
+
+La pregunta es:
+
+> **¿Cuánto trabajo tuvo que hacer SQL Server para obtener esas mismas 20 filas?**
+
+---
+
+# Parte 6 — No confiemos solamente en el cronómetro
+
+En el endpoint medimos `ToListAsync()` con `Stopwatch`.
+
+Nuestros resultados reales variaron bastante entre ejecuciones.
+
+Offset página 50.000:
+
+```text
+1096,80 ms
+584,45 ms
+```
+
+Keyset:
+
+```text
+867,36 ms
+4,06 ms
+```
+
+Sería tentador tomar el mejor resultado y escribir:
+
+> “Keyset es X veces más rápido”.
+
+Pero eso sería una conclusión pobre.
+
+Warm-up, cachés, estado de la conexión y otras condiciones del entorno pueden afectar el tiempo de pared. Nuestras propias ejecuciones ya muestran esa variación.
+
+Por eso usamos el cronómetro como **evidencia secundaria** y miramos el plan de ejecución real para entender el trabajo realizado por SQL Server.
+
+---
+
+# Parte 7 — Ver el plan de ejecución real
+
+## 21. Preparar SSMS para observar el SQL generado por EF Core
+
+Abrimos SQL Server Management Studio sobre `PaginationLabDb` y activamos:
+
+```text
+Query → Include Actual Execution Plan
+```
+
+o:
+
+```text
+Ctrl + M
+```
+
+Importante: no estamos reemplazando EF Core por SQL manual. Vamos a ejecutar el **SQL que acabamos de observar con `ToQueryString()`** para inspeccionar cómo lo resuelve SQL Server.
+
+En SSMS:
+
+1. seleccionamos `PaginationLabDb`;
+2. abrimos **New Query**;
+3. activamos **Query → Include Actual Execution Plan** o presionamos `Ctrl+M`;
+4. ejecutamos primero Offset y luego Keyset;
+5. después de cada ejecución abrimos la pestaña **Execution Plan**.
+
+Los tiempos y cantidades que aparecen a continuación son **los resultados de nuestro laboratorio**. El tiempo exacto puede variar en tu equipo; lo importante es observar la forma del plan y el trabajo realizado.
+
+## 22. Plan real de Offset
+
+Ejecutamos:
+
+```sql
+DECLARE @p int = 999980;
+DECLARE @p1 int = 20;
+
+SELECT [o].[Id], [o].[Number]
+FROM [Orders] AS [o]
+ORDER BY [o].[Id]
+OFFSET @p ROWS
+FETCH NEXT @p1 ROWS ONLY;
+```
+
+En nuestro laboratorio, el plan real mostró:
+
+```text
+Clustered Index Scan
+PK_Orders
+```
+
+Y el dato decisivo fue éste:
+
+```text
+1.000.000 filas procesadas
+20 filas devueltas
+```
+
+
+Pedimos 20 registros de la página 50.000, pero en esta ejecución el operador terminó recorriendo el millón de filas.
+
+Conceptualmente:
+
+```text
+1 ───────────────────────────── 999980 | 999981 ... 1000000
+          recorrer / descartar             devolver 20
+```
+
+## 23. Plan real de Keyset
+
+Ahora ejecutamos el SQL generado para Keyset:
+
+```sql
+DECLARE @p int = 20;
+DECLARE @lastId int = 999980;
+
+SELECT TOP(@p)
+    [o].[Id],
+    [o].[Number]
+FROM [Orders] AS [o]
+WHERE [o].[Id] > @lastId
+ORDER BY [o].[Id];
+```
+
+El plan real mostró:
+
+```text
+Clustered Index Seek
+PK_Orders
+```
+
+Y en nuestra ejecución:
+
+```text
+20 filas procesadas
+20 filas devueltas
+```
+
+
+Como `Id` es la clave del índice clustered, SQL Server pudo buscar el punto de comienzo correspondiente y continuar desde allí.
+
+Conceptualmente:
+
+```text
+                              ↓ seek
+1 ........................ 999980 | 999981 ... 1000000
+                                      leer 20
+```
+
+Ésta es la evidencia más importante del experimento.
+
+No estamos afirmando que una consulta siempre tardará un número determinado de milisegundos. Estamos observando que, **con este esquema, este índice, este dataset y estas consultas**, SQL Server eligió estrategias muy diferentes:
+
+```text
+OFFSET  → Clustered Index Scan → 1.000.000 procesadas → 20 devueltas
+KEYSET  → Clustered Index Seek →        20 procesadas → 20 devueltas
+```
+
+La documentación de EF Core explica precisamente que el costo de Offset crece con la cantidad de filas que deben omitirse y recomienda considerar Keyset para navegación secuencial, siempre acompañado por índices apropiados.
+
+---
+
+# Parte 8 — ¿Entonces hay que dejar de usar `Skip/Take`?
+
+No.
+
+Ésa sería una conclusión demasiado simple.
+
+Imaginemos una interfaz como ésta:
+
+```text
+1  2  3  ...  346  347  348  ...  1000
+```
+
+El usuario quiere saltar directamente desde la página 1 hasta la página 347.
+
+Offset expresa naturalmente esa operación porque conoce una posición:
+
+```csharp
+.Skip((347 - 1) * pageSize)
+.Take(pageSize)
+```
+
+Keyset no conoce de forma natural “la página 347”. Necesita conocer el cursor desde el cual continuar.
+
+Por eso Keyset encaja especialmente bien en escenarios como:
+
+- siguiente / anterior;
+- “cargar más”;
+- infinite scroll;
+- feeds;
+- APIs basadas en cursor.
+
+Si realmente necesitamos saltos arbitrarios de página, Offset puede seguir siendo la herramienta apropiada.
+
+También puede existir una estrategia híbrida: **Keyset para siguiente/anterior y Offset para saltos arbitrarios**.
+
+La decisión depende del comportamiento que necesita nuestra interfaz, no de declarar una técnica universalmente superior.
+
+---
+
+# Parte 9 — Un detalle crítico: el orden debe ser único
+
+Nuestro laboratorio utiliza:
+
+```csharp
+.OrderBy(order => order.Id)
+```
+
+`Id` es único, por lo que el orden queda completamente determinado.
+
+Pero imaginemos un sistema real que pagina por fecha:
+
+```csharp
+.OrderBy(order => order.CreatedAt)
+```
+
+Dos pedidos pueden tener exactamente el mismo `CreatedAt`.
+
+En ese caso el orden no es completamente único y la base podría resolver el empate de manera diferente entre consultas.
+
+Una alternativa es agregar una segunda clave:
+
+```csharp
+.OrderBy(order => order.CreatedAt)
+.ThenBy(order => order.Id)
+```
+
+Entonces nuestro cursor también necesita recordar ambas propiedades.
+
+Conceptualmente:
+
+```text
+lastCreatedAt = 2026-10-01 10:30:00
+lastId        = 1250
+```
+
+La consulta Keyset puede expresarse como:
+
+```csharp
+.Where(order =>
+    order.CreatedAt > lastCreatedAt ||
+    (order.CreatedAt == lastCreatedAt && order.Id > lastId))
+.OrderBy(order => order.CreatedAt)
+.ThenBy(order => order.Id)
+.Take(pageSize)
+```
+
+Y el índice debería acompañar ese orden compuesto.
+
+Éste es un detalle importante: **Keyset no elimina la necesidad de diseñar correctamente el orden y los índices**.
+
+---
+
+# Parte 10 — Controller completo y checkpoint final
+
+Hasta acá fuimos agregando cada endpoint de forma incremental. Antes de cerrar, conviene comparar nuestro archivo con la versión completa para evitar errores de `using`, llaves o atributos.
+
+`Controllers/OrdersController.cs` debe quedar así:
+
+```csharp
+using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PaginationLab.Api.Data;
+using PaginationLab.Api.Models;
+
+namespace PaginationLab.Api.Controllers;
+
+[ApiController]
+[Route("api/orders")]
+public class OrdersController : ControllerBase
+{
+    private readonly AppDbContext _context;
+
+    public OrdersController(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    [HttpPost("setup-correctness")]
+    public async Task<IActionResult> SetupCorrectness()
+    {
+        await _context.Orders.ExecuteDeleteAsync();
+
+        await _context.Database.ExecuteSqlRawAsync(
+            "DBCC CHECKIDENT ('Orders', RESEED, 0);");
+
+        var orders = Enumerable.Range(1, 20)
+            .Select(number => new Order
+            {
+                Number = $"ORD-{number:000}"
+            })
+            .ToList();
+
+        _context.Orders.AddRange(orders);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Dataset de consistencia reiniciado.",
+            count = orders.Count,
+            ids = orders.Select(order => order.Id)
+        });
+    }
+
+    [HttpGet("offset")]
+    public async Task<IActionResult> Offset(int page = 1, int pageSize = 5)
+    {
+        if (page < 1 || pageSize < 1)
+        {
+            return BadRequest("page y pageSize deben ser mayores que cero.");
+        }
+
+        var orders = await _context.Orders
+            .AsNoTracking()
+            .OrderBy(order => order.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(order => new
+            {
+                order.Id,
+                order.Number
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            strategy = "offset",
+            page,
+            pageSize,
+            ids = orders.Select(order => order.Id),
+            orders
+        });
+    }
+
+    [HttpGet("keyset")]
+    public async Task<IActionResult> Keyset(int lastId = 0, int pageSize = 5)
+    {
+        if (lastId < 0 || pageSize < 1)
+        {
+            return BadRequest("Parámetros inválidos.");
+        }
+
+        var orders = await _context.Orders
+            .AsNoTracking()
+            .Where(order => order.Id > lastId)
+            .OrderBy(order => order.Id)
+            .Take(pageSize)
+            .Select(order => new
+            {
+                order.Id,
+                order.Number
+            })
+            .ToListAsync();
+
+        var nextLastId = orders.Count == 0
+            ? lastId
+            : orders[^1].Id;
+
+        return Ok(new
+        {
+            strategy = "keyset",
+            lastId,
+            pageSize,
+            nextLastId,
+            ids = orders.Select(order => order.Id),
+            orders
+        });
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var order = await _context.Orders.FindAsync(id);
+
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        _context.Orders.Remove(order);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = $"Order {id} eliminado.",
+            deletedId = id
+        });
+    }
+
+    [HttpGet("performance/offset")]
+    public async Task<IActionResult> PerformanceOffset(int page = 1, int pageSize = 20)
+    {
+        if (page < 1 || pageSize < 1)
+        {
+            return BadRequest("page y pageSize deben ser mayores que cero.");
+        }
+
+        var skip = (page - 1) * pageSize;
+
+        var query = _context.Orders
+            .AsNoTracking()
+            .OrderBy(order => order.Id)
+            .Skip(skip)
+            .Take(pageSize);
+
+        var sql = query.ToQueryString();
+        var stopwatch = Stopwatch.StartNew();
+        var orders = await query.ToListAsync();
+        stopwatch.Stop();
+
+        return Ok(new
+        {
+            strategy = "offset",
+            page,
+            pageSize,
+            skip,
+            elapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds,
+            sql,
+            ids = orders.Select(order => order.Id)
+        });
+    }
+
+    [HttpGet("performance/keyset")]
+    public async Task<IActionResult> PerformanceKeyset(int lastId = 0, int pageSize = 20)
+    {
+        if (lastId < 0 || pageSize < 1)
+        {
+            return BadRequest(
+                "lastId debe ser mayor o igual a cero y pageSize mayor que cero.");
+        }
+
+        var query = _context.Orders
+            .AsNoTracking()
+            .Where(order => order.Id > lastId)
+            .OrderBy(order => order.Id)
+            .Take(pageSize);
+
+        var sql = query.ToQueryString();
+        var stopwatch = Stopwatch.StartNew();
+        var orders = await query.ToListAsync();
+        stopwatch.Stop();
+
+        return Ok(new
+        {
+            strategy = "keyset",
+            lastId,
+            pageSize,
+            elapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds,
+            sql,
+            ids = orders.Select(order => order.Id)
+        });
+    }
+}
+```
+
+Hacemos un último **Build Solution**. Si modificamos código con la API detenida, volvemos a ejecutarla y usamos `PaginationLab.Api.http` para repetir los requests relevantes.
+
+El endpoint `setup-correctness` utiliza `DBCC CHECKIDENT`, una instrucción específica de SQL Server. Es intencional: este laboratorio está construido sobre EF Core + SQL Server y necesitamos que el escenario vuelva de forma determinista a IDs `1..20`.
+
+---
+
+# Qué demostramos realmente
+
+Empezamos con una consulta perfectamente razonable:
+
+```csharp
+.Skip((page - 1) * pageSize)
+.Take(pageSize)
+```
+
+Y construimos dos experimentos reproducibles.
+
+En el primero:
+
+```text
+OFFSET
+Página 1 → 1,2,3,4,5
+DELETE 3
+Página 2 → 7,8,9,10,11
+
+Resultado: el usuario nunca vio el 6.
+```
+
+Con Keyset:
+
+```text
+Página 1 → 1,2,3,4,5
+cursor   → 5
+DELETE 3
+siguiente → 6,7,8,9,10
+```
+
+En el segundo experimento pedimos los mismos 20 registros sobre una tabla de un millón de filas.
+
+Nuestro plan real mostró:
+
+```text
+OFFSET
+Skip(999980)
+Clustered Index Scan
+1.000.000 filas procesadas
+20 devueltas
+```
+
+frente a:
+
+```text
+KEYSET
+Id > 999980
+Clustered Index Seek
+20 filas procesadas
+20 devueltas
+```
+
+Eso nos permite llegar a una conclusión bastante más útil que “Keyset es más rápido”.
+
+`Skip/Take` y Keyset representan **dos modelos diferentes de navegación**:
+
+```text
+OFFSET
+"Quiero la página que está en esta posición"
+```
+
+```text
+KEYSET
+"Quiero continuar después de este registro"
+```
+
+Cuando necesitamos navegación secuencial sobre datasets grandes y vivos, esa diferencia puede tener consecuencias tanto de consistencia como de trabajo realizado por la base de datos.
+
+Cuando necesitamos saltar directamente a una página arbitraria, Offset conserva una ventaja funcional importante.
+
+La elección correcta depende del problema que estamos resolviendo.
+
+## Código completo
+
+El laboratorio reproducible, los endpoints, el archivo `.http`, los scripts utilizados para generar el millón de registros y las consultas para reproducir ambos planes de ejecución están disponibles en:
+
+**DotNetLabs → `01-Pagination-Offset-vs-Keyset`**
+
+Repositorio: `https://github.com/leandro-layerle/DotNetLabs/tree/main/01-Pagination-Offset-vs-Keyset`
