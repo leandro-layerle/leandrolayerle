@@ -9,6 +9,19 @@ const nextConfig = {
     "tsx",
     "mdx",
   ],
+
+  async rewrites() {
+    return [
+      {
+        source: "/cursoia",
+        destination: "https://mini-app-curso-ia.vercel.app/",
+      },
+      {
+        source: "/cursoia/:path*",
+        destination: "https://mini-app-curso-ia.vercel.app/:path*",
+      },
+    ];
+  },
 };
 
 const withMDX = createMDX({
@@ -34,4 +47,4 @@ const withMDX = createMDX({
   },
 });
 
-export default withMDX(nextConfig); 
+export default withMDX(nextConfig);
