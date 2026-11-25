@@ -6,6 +6,7 @@ const services = [
   {
     icon: "▥",
     title: "Consultoría tecnológica",
+    href: "/servicios/consultoria",
     description:
       "Analizo tu negocio, procesos y herramientas para definir la mejor estrategia tecnológica.",
     bullets: [
@@ -19,6 +20,7 @@ const services = [
   {
     icon: "⌘",
     title: "Automatización e integraciones",
+    href: "/servicios/automatizacion",
     description:
       "Conecto tus herramientas y elimino tareas manuales para que tu operación fluya de forma simple y confiable.",
     bullets: [
@@ -32,6 +34,7 @@ const services = [
   {
     icon: "</>",
     title: "Sistemas a medida",
+    href: "/servicios/desarrollo",
     description:
       "Diseño y desarrollo soluciones pensadas para necesidades reales, escalables y fáciles de mantener.",
     bullets: [
@@ -45,6 +48,7 @@ const services = [
   {
     icon: "✦",
     title: "IA aplicada",
+    href: "/servicios/inteligencia-artificial",
     description:
       "Incorporo inteligencia artificial donde realmente genera valor en tus procesos y decisiones.",
     bullets: [
@@ -123,7 +127,7 @@ export default function Services() {
 
                 {/* CTA CIRCULAR */}
                 <Link
-                  href="/contact"
+                  href={service.href}
                   className={styles.cardButton}
                   aria-label={`Conocer más sobre ${service.title}`}
                 >

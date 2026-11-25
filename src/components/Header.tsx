@@ -271,7 +271,7 @@ export default function Header() {
             Inicio
           </Link>
 
-          <Link href="/#servicios">
+          <Link href="/servicios">
             Servicios
           </Link>
 
@@ -388,7 +388,7 @@ export default function Header() {
           </Link>
 
           <Link
-            href="/#servicios"
+            href="/servicios"
             onClick={
               closeMenu
             }

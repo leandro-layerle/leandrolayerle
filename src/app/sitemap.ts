@@ -4,6 +4,8 @@ import {
   getAllArticles,
 } from "@/content/articles/articles";
 
+import { services, industries } from "@/app/servicios/[slug]/services";
+
 const BASE_URL =
   "https://www.leandrolayerle.com.ar";
 
@@ -39,6 +41,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
+  const servicePages: MetadataRoute.Sitemap = [
+    { url: `${BASE_URL}/servicios`, changeFrequency: "monthly", priority: 0.9 },
+    ...[...services, ...industries].map((service) => ({
+      url: `${BASE_URL}/servicios/${service.slug}`,
+      changeFrequency: "monthly" as const,
+      priority: 0.8,
+      images: [`${BASE_URL}${service.image}`],
+    })),
+  ];
+
   const articlePages: MetadataRoute.Sitemap =
     articles.map(
       (article) => ({
@@ -67,6 +79,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     ...staticPages,
+    ...servicePages,
     ...articlePages,
   ];
 }

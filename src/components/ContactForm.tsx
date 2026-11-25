@@ -7,14 +7,12 @@ import {
 
 import styles from "./ContactForm.module.css";
 
-const services = [
-  "Consultoría",
-  "Automatización e integraciones",
-  "Sistemas a medida",
-  "IA aplicada",
-  "Mentoría",
-  "No estoy seguro",
-];
+import { serviceOptions } from "@/lib/contact-options";
+
+type ContactFormProps = {
+  initialService?: string;
+  sector?: string;
+};
 
 type FormStatus =
   | "idle"
@@ -22,7 +20,7 @@ type FormStatus =
   | "success"
   | "error";
 
-export default function ContactForm() {
+export default function ContactForm({ initialService = "", sector = "" }: ContactFormProps) {
   const [status, setStatus] =
     useState<FormStatus>("idle");
 
@@ -60,6 +58,8 @@ export default function ContactForm() {
 
       message:
         formData.get("message"),
+
+      sector,
 
       /*
        * Honeypot.
@@ -200,6 +200,12 @@ export default function ContactForm() {
           />
         </div>
 
+        {sector && (
+          <p className={styles.field}>
+            <strong>Sector de interés:</strong> {sector}
+          </p>
+        )}
+
         {/* ==================================================
             NOMBRE + EMAIL
         ================================================== */}
@@ -294,8 +300,8 @@ export default function ContactForm() {
               styles.serviceOptions
             }
           >
-            {services.map(
-              (service) => (
+            {serviceOptions.map(
+              ({ label: service }) => (
                 <label
                   key={service}
                   className={
@@ -306,6 +312,7 @@ export default function ContactForm() {
                     type="radio"
                     name="service"
                     value={service}
+                    defaultChecked={service === initialService}
                     required
                   />
 
