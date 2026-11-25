@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import ContactForm from "@/components/ContactForm";
+import { getServiceLabel, getSectorLabel } from "@/lib/contact-options";
 
 import styles from "./contact.module.css";
 
@@ -24,7 +25,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ContactPage() {
+type Props = {
+  searchParams: Promise<{ servicio?: string | string[]; sector?: string | string[] }>;
+};
+
+export default async function ContactPage({ searchParams }: Props) {
+  const query = await searchParams;
+  const sector = getSectorLabel(query.sector);
+  const initialService = getServiceLabel(query.servicio) || (sector ? "No estoy seguro" : "");
   return (
     <main className={styles.page}>
       <div className={styles.container}>
@@ -80,7 +88,7 @@ export default function ContactPage() {
           </div>
         </section>
 
-        <ContactForm />
+        <ContactForm key={`${initialService}:${sector}`} initialService={initialService} sector={sector} />
       </div>
     </main>
   );

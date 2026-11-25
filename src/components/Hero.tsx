@@ -51,7 +51,7 @@ export default function Hero() {
             </Link>
 
             <Link
-              href="/#servicios"
+              href="/servicios"
               className={styles.secondaryButton}
             >
               Conocer mis servicios

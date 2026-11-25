@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { sectorOptions } from "@/lib/contact-options";
 
 const MAX_BODY_SIZE = 20_000;
 
@@ -14,6 +15,7 @@ type ContactRequest = {
   email?: unknown;
   company?: unknown;
   service?: unknown;
+  sector?: unknown;
   message?: unknown;
 
   /*
@@ -114,6 +116,8 @@ export async function POST(request: Request) {
 
     const message =
       readString(body.message);
+
+    const sector = readString(body.sector);
 
     const website =
       readString(body.website);
@@ -225,6 +229,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (sector && !sectorOptions.some(option => option.label === sector)) {
+      return NextResponse.json(
+        { success: false, error: "El sector seleccionado no es válido." },
+        { status: 400 },
+      );
+    }
+
     if (
       message.length < 5 ||
       message.length >
@@ -298,6 +309,8 @@ export async function POST(request: Request) {
     const safeService =
       escapeHtml(service);
 
+    const safeSector = escapeHtml(sector || "No indicado");
+
     const safeMessage =
       escapeHtml(message).replace(
         /\n/g,
@@ -342,6 +355,7 @@ Nombre: ${name}
 Email: ${email}
 Empresa: ${company || "No indicada"}
 Servicio: ${service}
+Sector: ${sector || "No indicado"}
 
 Mensaje:
 ${message}
@@ -383,6 +397,11 @@ ${message}
             <p>
               <strong>Servicio:</strong>
               ${safeService}
+            </p>
+
+            <p>
+              <strong>Sector:</strong>
+              ${safeSector}
             </p>
 
             <hr

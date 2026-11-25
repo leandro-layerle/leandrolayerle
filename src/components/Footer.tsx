@@ -37,7 +37,7 @@ export default function Footer() {
               </p>
 
               <Link href="/">Inicio</Link>
-              <Link href="/#servicios">Servicios</Link>
+              <Link href="/servicios">Servicios</Link>
               <Link href="/#proyectos">Proyectos</Link>
               <Link href="/articulos">Artículos</Link>
               <Link href="/mentorias">Mentorías</Link>
@@ -49,19 +49,19 @@ export default function Footer() {
                 Servicios
               </p>
 
-              <Link href="/#servicios">
+              <Link href="/servicios/consultoria">
                 Consultoría tecnológica
               </Link>
 
-              <Link href="/#servicios">
+              <Link href="/servicios/automatizacion">
                 Automatización e integraciones
               </Link>
 
-              <Link href="/#servicios">
+              <Link href="/servicios/desarrollo">
                 Sistemas a medida
               </Link>
 
-              <Link href="/#servicios">
+              <Link href="/servicios/inteligencia-artificial">
                 IA aplicada
               </Link>
             </div>
